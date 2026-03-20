@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR-V™ Issuer Dashboard</title>
+  <meta name="description" content="Issuer control dashboard for QR-V records, verification activity, and subscription metrics." />
+  <style>
+    :root {
+      --bg: #04101e;
+      --panel: rgba(10, 28, 52, 0.94);
+      --line: rgba(80,180,255,.18);
+      --text: #eef6ff;
+      --muted: #bcd0ea;
+      --accent: #19a8ff;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1100px 520px at 20% 20%, rgba(25,168,255,.18), transparent 55%),
+        radial-gradient(900px 500px at 80% 35%, rgba(13,110,253,.14), transparent 55%),
+        linear-gradient(180deg, #04101e 0%, #020617 100%);
+      padding: 24px;
+    }
+    .wrap { width: min(1240px, 100%); margin: 0 auto; }
+    .hero, .panel {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .hero { padding: 28px; margin-bottom: 20px; }
+    .eyebrow {
+      display: inline-flex; padding: 10px 14px; border: 1px solid rgba(150,210,255,.18);
+      background: rgba(13,39,74,.45); border-radius: 999px; color: #d9ebff;
+      font-size: 12px; letter-spacing: .10em; text-transform: uppercase; font-weight: 700;
+    }
+    h1 { margin: 18px 0 10px; font-size: clamp(30px, 4vw, 50px); line-height: 1.04; letter-spacing: -.03em; }
+    .sub { color: var(--muted); line-height: 1.7; margin: 0; max-width: 880px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 18px; }
+    .panel { padding: 22px; }
+    .metric .label { color: #93b4da; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+    .metric .value { margin-top: 10px; font-size: 34px; letter-spacing: -.03em; }
+    .metric .meta { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .layout { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(120,195,255,.10); text-align: left; }
+    th { color: #93b4da; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .tag {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 28px; padding: 0 10px;
+      border-radius: 999px; font-size: 12px; font-weight: 700;
+    }
+    .tag.ok { background: rgba(34,197,94,.12); color: #d7ffe3; border: 1px solid rgba(34,197,94,.24); }
+    .tag.warn { background: rgba(245,158,11,.12); color: #ffe7be; border: 1px solid rgba(245,158,11,.24); }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 16px;
+      border-radius: 14px; text-decoration: none; color: #eaf5ff; font-weight: 700;
+      border: 1px solid rgba(120,195,255,.22); background: rgba(255,255,255,.03);
+    }
+    .btn.primary { background: linear-gradient(180deg, #25b4ff, #0d6efd); border: none; box-shadow: 0 14px 30px rgba(13,110,253,.28); }
+    .note { color: var(--muted); font-size: 13px; line-height: 1.7; }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+      .layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">QR-V™ • Issuer Dashboard • Revenue + Registry Control</div>
+      <h1>Issuer command dashboard</h1>
+      <p class="sub">Monitor issuance volume, verification activity, scan intelligence, active plans, and trust outcomes from one operational console. This interface is designed as the issuer control plane for the QR-V network.</p>
+      <div class="actions">
+        <a class="btn primary" href="/">Open issuer portal</a>
+        <a class="btn" href="/verify/certificate-signed/QRV-DEMO">Open signed certificate demo</a>
+        <a class="btn" href="/billing/index.html">Open monetization layer</a>
+      </div>
+    </section>
+
+    <section class="grid">
+      <section class="panel metric"><div class="label">Issued records</div><div class="value" id="issuedRecords">1,284</div><div class="meta">All-time registry-backed issuance</div></section>
+      <section class="panel metric"><div class="label">Verified scans</div><div class="value" id="verifiedScans">8,932</div><div class="meta">Successful trusted verification outcomes</div></section>
+      <section class="panel metric"><div class="label">Active subscribers</div><div class="value" id="subscribers">42</div><div class="meta">Organizations on paid issuer plans</div></section>
+      <section class="panel metric"><div class="label">MRR</div><div class="value" id="mrr">$4,980</div><div class="meta">Recurring infrastructure revenue</div></section>
+    </section>
+
+    <section class="layout">
+      <section class="panel">
+        <h2 style="margin-top:0">Recent issuance activity</h2>
+        <table>
+          <thead>
+            <tr><th>QRVID</th><th>Issuer</th><th>Type</th><th>Status</th><th>Created</th></tr>
+          </thead>
+          <tbody id="issuanceTable">
+            <tr><td>QRV-CERT-1048</td><td>Innovation University</td><td>Certificate</td><td><span class="tag ok">VERIFIED</span></td><td>2026-03-20 14:06 UTC</td></tr>
+            <tr><td>QRV-ID-8821</td><td>Member Network</td><td>Identity</td><td><span class="tag ok">VERIFIED</span></td><td>2026-03-20 13:58 UTC</td></tr>
+            <tr><td>QRV-DOC-7710</td><td>Compliance Office</td><td>Document</td><td><span class="tag warn">REVIEW</span></td><td>2026-03-20 13:11 UTC</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2 style="margin-top:0">Plan + monetization snapshot</h2>
+        <table>
+          <tbody>
+            <tr><th>Current plan</th><td>Builder</td></tr>
+            <tr><th>Monthly fee</th><td>$49</td></tr>
+            <tr><th>Verification quota</th><td>1,000 / month</td></tr>
+            <tr><th>API usage</th><td>712 used</td></tr>
+            <tr><th>Registry writes</th><td>148 used</td></tr>
+            <tr><th>Plan health</th><td><span class="tag ok">Active</span></td></tr>
+          </tbody>
+        </table>
+        <div class="actions">
+          <a class="btn primary" href="/billing/index.html">Upgrade plan</a>
+          <a class="btn" href="/public/verify/index.html">View public trust UI</a>
+        </div>
+        <p class="note">This dashboard should ultimately be backed by live API reads for issuance totals, scan counts, webhook delivery status, and billing events.</p>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
