@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR-V™ Signed Verification Certificate</title>
+  <meta name="description" content="Signed QR-V verification certificate view with printable proof and signature display." />
+  <style>
+    :root {
+      --bg: #04101e;
+      --panel: rgba(10, 28, 52, 0.94);
+      --line: rgba(80,180,255,.18);
+      --text: #eef6ff;
+      --muted: #bcd0ea;
+      --accent: #19a8ff;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --gold: #d4af37;
+      --shadow: 0 24px 60px rgba(0,0,0,.45);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1100px 520px at 20% 20%, rgba(25,168,255,.18), transparent 55%),
+        radial-gradient(900px 500px at 80% 35%, rgba(13,110,253,.14), transparent 55%),
+        linear-gradient(180deg, #04101e 0%, #020617 100%);
+      padding: 28px;
+    }
+    .wrap { width: min(1120px, 100%); margin: 0 auto; }
+    .hero, .panel {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(7,26,47,.84), rgba(2,8,23,.95));
+      box-shadow: var(--shadow);
+    }
+    .hero { padding: 28px; margin-bottom: 20px; }
+    .eyebrow {
+      display: inline-flex;
+      padding: 10px 14px;
+      border: 1px solid rgba(150,210,255,.18);
+      background: rgba(13,39,74,.45);
+      border-radius: 999px;
+      color: #d9ebff;
+      font-size: 12px;
+      letter-spacing: .10em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 18px 0 10px;
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 1.04;
+      letter-spacing: -.03em;
+    }
+    .sub { color: var(--muted); line-height: 1.7; max-width: 780px; margin: 0; }
+    .status {
+      display: inline-flex;
+      margin-top: 18px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .status.verified {
+      background: rgba(34,197,94,.12);
+      border-color: rgba(34,197,94,.24);
+      color: #d7ffe3;
+    }
+    .status.invalid {
+      background: rgba(239,68,68,.12);
+      border-color: rgba(239,68,68,.24);
+      color: #ffdada;
+    }
+    .grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 20px; }
+    .panel { padding: 24px; background: var(--panel); }
+    .certificate { position: relative; overflow: hidden; }
+    .certificate::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(25,168,255,.10), transparent 35%);
+      pointer-events: none;
+    }
+    .cert-title { font-size: 30px; letter-spacing: -.02em; margin: 0 0 10px; }
+    .cert-sub { color: var(--muted); line-height: 1.65; margin: 0 0 18px; }
+    .award {
+      margin: 26px 0;
+      padding: 22px;
+      border: 1px solid rgba(120,195,255,.12);
+      border-radius: 18px;
+      background: rgba(255,255,255,.02);
+    }
+    .award .label { color: #93b4da; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 800; }
+    .award .value { margin-top: 10px; font-size: 32px; line-height: 1.15; letter-spacing: -.02em; }
+    .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 18px; }
+    .meta-card {
+      border: 1px solid rgba(120,195,255,.10);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(255,255,255,.02);
+    }
+    .meta-card .k { color: #93b4da; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; font-weight: 800; }
+    .meta-card .v { margin-top: 8px; line-height: 1.5; word-break: break-word; }
+    .seal {
+      margin-top: 22px;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(212,175,55,.24);
+      background: rgba(212,175,55,.10);
+      color: #f7e8b1;
+      font-weight: 700;
+    }
+    .proof pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #b9d7f5;
+    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(120,195,255,.22);
+      color: #eaf5ff;
+      text-decoration: none;
+      background: rgba(255,255,255,.03);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: linear-gradient(180deg, #25b4ff, #0d6efd);
+      border: none;
+      box-shadow: 0 14px 30px rgba(13,110,253,.28);
+    }
+    @media print {
+      body { background: #fff; color: #000; padding: 0; }
+      .hero, .panel { box-shadow: none; background: #fff; color: #000; }
+      .sub, .cert-sub, .meta-card .k { color: #555; }
+      .actions { display: none; }
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .meta { grid-template-columns: 1fr; }
+      body { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">QR-V™ • Signed Certificate • Registry Proof</div>
+      <h1>Signed verification certificate</h1>
+      <p class="sub">This certificate view renders the verification result as a formal signed proof document suitable for institutional review, onboarding, compliance checks, printing, and shareable trust confirmation.</p>
+      <div id="status" class="status invalid">Awaiting verification result</div>
+    </section>
+
+    <section class="grid">
+      <section class="panel certificate">
+        <h2 class="cert-title">Registry-backed certificate</h2>
+        <p class="cert-sub">This certifies that the referenced record has been resolved through the QR-V verification network, validated against the authoritative registry, and sealed with a cryptographic signature.</p>
+
+        <div class="award">
+          <div class="label">Certified subject / owner</div>
+          <div id="owner" class="value">—</div>
+        </div>
+
+        <div class="meta">
+          <div class="meta-card"><div class="k">QRVID</div><div id="qrvid" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Record type</div><div id="recordType" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Issuer</div><div id="issuer" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Timestamp</div><div id="timestamp" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Hash</div><div id="hash" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Signature</div><div id="signature" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Decision</div><div id="decision" class="v">—</div></div>
+          <div class="meta-card"><div class="k">Certificate URL</div><div id="shareUrl" class="v">—</div></div>
+        </div>
+
+        <div id="seal" class="seal">QR-V™ Registry Seal — pending</div>
+
+        <div class="actions">
+          <button class="btn primary" onclick="window.print()">Print certificate</button>
+          <a class="btn" id="portalLink" href="#">Open verification portal</a>
+          <a class="btn" id="pdfLink" href="#">Open PDF endpoint</a>
+        </div>
+      </section>
+
+      <section class="panel proof">
+        <h2 style="margin-top:0">Proof object</h2>
+        <pre id="proof">Awaiting response…</pre>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = 'https://api.qrv.network'
+    const PORTAL_BASE = 'https://verify.qrv.network'
+
+    function getQrvid() {
+      const parts = window.location.pathname.split('/').filter(Boolean)
+      return parts[parts.length - 1] || ''
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value || '—'
+    }
+
+    function decisionLabel(status) {
+      if (status === 'VERIFIED') return 'Trusted — verified against registry'
+      if (status === 'REVOKED') return 'Revoked — reject'
+      if (status === 'EXPIRED') return 'Expired — reject'
+      return 'Not found — reject'
+    }
+
+    function statusLabel(status) {
+      if (status === 'VERIFIED') return 'Verified signed certificate'
+      if (status === 'REVOKED') return 'Revoked certificate'
+      if (status === 'EXPIRED') return 'Expired certificate'
+      return 'Verification failed'
+    }
+
+    function applyStatus(status) {
+      const el = document.getElementById('status')
+      const isVerified = status === 'VERIFIED'
+      el.className = `status ${isVerified ? 'verified' : 'invalid'}`
+      el.textContent = statusLabel(status)
+      document.getElementById('seal').textContent = isVerified
+        ? 'QR-V™ Registry Seal — VERIFIED & SIGNED'
+        : `QR-V™ Registry Seal — ${status}`
+    }
+
+    async function loadCertificate() {
+      const qrvid = getQrvid()
+      const shareUrl = `${PORTAL_BASE}/certificate-signed/${encodeURIComponent(qrvid)}`
+      document.getElementById('portalLink').href = `${PORTAL_BASE}/${encodeURIComponent(qrvid)}`
+      document.getElementById('pdfLink').href = `${PORTAL_BASE}/certificate/${encodeURIComponent(qrvid)}/pdf`
+      setText('shareUrl', shareUrl)
+      setText('qrvid', qrvid || '—')
+
+      if (!qrvid) {
+        applyStatus('NOT_FOUND')
+        setText('decision', decisionLabel('NOT_FOUND'))
+        setText('proof', JSON.stringify({ error: 'Missing QRVID in path' }, null, 2))
+        return
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/verify/${encodeURIComponent(qrvid)}`)
+        const data = await res.json()
+        const status = data.status || 'NOT_FOUND'
+
+        applyStatus(status)
+        setText('owner', data.owner || data.subject || 'Unspecified subject')
+        setText('recordType', data.recordType || data.record_type || '—')
+        setText('issuer', data.issuer || '—')
+        setText('timestamp', data.timestamp || '—')
+        setText('hash', data.hash || '—')
+        setText('signature', data.signature || '—')
+        setText('decision', decisionLabel(status))
+        setText('proof', JSON.stringify(data, null, 2))
+      } catch (err) {
+        applyStatus('NOT_FOUND')
+        setText('decision', 'Unable to verify — reject')
+        setText('proof', JSON.stringify({ error: err.message || 'Verification request failed' }, null, 2))
+      }
+    }
+
+    loadCertificate()
+  </script>
+</body>
+</html>
