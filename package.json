@@ -2,13 +2,15 @@
   "name": "issuer-qrv",
   "version": "1.0.0",
   "description": "QR-V Issuer Portal starter",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node src/server.js",
+    "smoke-check": "RUN_SMOKE_CHECK=1 node src/server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "pg": "^8.13.1",
     "qrcode": "^1.5.4",
     "uuid": "^9.0.1"
   }
