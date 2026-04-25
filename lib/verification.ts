@@ -4,15 +4,17 @@ export type VerificationRecord = {
   status: VerifyStatus;
   issuerName: string;
   issuerLogoUrl?: string;
+  recordType?: string;
   credentialTitle: string;
   subjectDisplay: string;
   issuedAt: string;
   verifiedAt: string;
   proofReference: string;
   qrvid: string;
+  apiUnavailable?: boolean;
 };
 
-const VERIFY_API_BASE_URL = process.env.NEXT_PUBLIC_QRV_VERIFY_API_BASE_URL ?? 'https://api.qrv.network/verify';
+const VERIFY_API_BASE_URL = process.env.NEXT_PUBLIC_QRV_API_BASE_URL ?? 'https://api.qrv.network';
 
 function asText(value: unknown, fallback = 'Unavailable') {
   return typeof value === 'string' && value.trim() ? value : fallback;
@@ -35,7 +37,7 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
   const verifiedAt = new Date().toISOString();
 
   try {
-    const response = await fetch(`${VERIFY_API_BASE_URL}/${encodedQrvid}`, {
+    const response = await fetch(`${VERIFY_API_BASE_URL}/api/v1/verify/${encodedQrvid}`, {
       method: 'GET',
       cache: 'no-store',
       headers: {
@@ -47,6 +49,7 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       return {
         status: 'NOT_FOUND',
         issuerName: 'Unavailable',
+        recordType: 'Unavailable',
         credentialTitle: 'Unavailable',
         subjectDisplay: 'Unavailable',
         issuedAt: 'Unavailable',
@@ -60,26 +63,30 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       return {
         status: 'NOT_FOUND',
         issuerName: 'Unavailable',
+        recordType: 'Unavailable',
         credentialTitle: 'Unavailable',
         subjectDisplay: 'Unavailable',
         issuedAt: 'Unavailable',
         verifiedAt,
         proofReference: 'Unavailable',
         qrvid,
+        apiUnavailable: true,
       };
     }
 
     const data: Record<string, unknown> = await response.json();
-    const issuerLogoUrl = typeof data.issuerLogoUrl === 'string'
-      ? data.issuerLogoUrl
-      : typeof data.issuer_logo_url === 'string'
-        ? data.issuer_logo_url
-        : undefined;
+    const issuerLogoUrl =
+      typeof data.issuerLogoUrl === 'string'
+        ? data.issuerLogoUrl
+        : typeof data.issuer_logo_url === 'string'
+          ? data.issuer_logo_url
+          : undefined;
 
     return {
       status: normalizeStatus(data.status),
       issuerName: asText(data.issuerName ?? data.issuer),
       issuerLogoUrl,
+      recordType: asText(data.recordType ?? data.record_type ?? data.type),
       credentialTitle: asText(data.credentialTitle ?? data.title),
       subjectDisplay: asText(data.subjectDisplay ?? data.recipientName ?? data.subject),
       issuedAt: asText(data.issuedAt ?? data.issueDate ?? data.created_at),
@@ -91,12 +98,14 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
     return {
       status: 'NOT_FOUND',
       issuerName: 'Unavailable',
+      recordType: 'Unavailable',
       credentialTitle: 'Unavailable',
       subjectDisplay: 'Unavailable',
       issuedAt: 'Unavailable',
       verifiedAt,
       proofReference: 'Unavailable',
       qrvid,
+      apiUnavailable: true,
     };
   }
 }
