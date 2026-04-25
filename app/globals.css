@@ -93,8 +93,7 @@ body {
 }
 
 .status-revoked,
-.status-expired,
-.status-error {
+.status-expired {
   background: rgba(253, 78, 78, 0.16);
   color: #ffc4c4;
   border: 1px solid rgba(255, 174, 174, 0.3);
@@ -104,6 +103,25 @@ body {
   background: rgba(255, 205, 102, 0.18);
   color: #ffe4a5;
   border: 1px solid rgba(255, 221, 148, 0.32);
+}
+
+
+.issuer-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.issuer-logo {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(215, 227, 251, 0.35);
+  background: rgba(1, 10, 24, 0.32);
+  padding: 0.15rem;
 }
 
 .status-message {

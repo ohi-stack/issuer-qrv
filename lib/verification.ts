@@ -1,26 +1,41 @@
-export type VerifyStatus = 'VERIFIED' | 'REVOKED' | 'EXPIRED' | 'NOT_FOUND' | 'ERROR';
+export type VerifyStatus = 'VERIFIED' | 'REVOKED' | 'EXPIRED' | 'NOT_FOUND';
 
 export type VerificationRecord = {
   status: VerifyStatus;
-  issuer: string;
-  recordType: string;
-  owner: string;
-  createdDate: string;
-  hash: string;
+  issuerName: string;
+  issuerLogoUrl?: string;
+  credentialTitle: string;
+  subjectDisplay: string;
+  issuedAt: string;
+  verifiedAt: string;
+  proofReference: string;
   qrvid: string;
 };
 
-const REGISTRY_BASE_URL = 'https://registry.qrv.network/verify';
+const VERIFY_API_BASE_URL = process.env.NEXT_PUBLIC_QRV_VERIFY_API_BASE_URL ?? 'https://api.qrv.network/verify';
 
 function asText(value: unknown, fallback = 'Unavailable') {
   return typeof value === 'string' && value.trim() ? value : fallback;
 }
 
+function normalizeStatus(rawValue: unknown): VerifyStatus {
+  const rawStatus = asText(rawValue, 'NOT_FOUND').toUpperCase();
+  if (rawStatus === 'VERIFIED' || rawStatus === 'REVOKED' || rawStatus === 'EXPIRED') {
+    return rawStatus;
+  }
+  return 'NOT_FOUND';
+}
+
+function deriveProofReference(data: Record<string, unknown>) {
+  return asText(data.hash ?? data.proofReference ?? data.proof_reference, 'Unavailable');
+}
+
 export async function fetchVerification(qrvid: string): Promise<VerificationRecord> {
   const encodedQrvid = encodeURIComponent(qrvid.trim());
+  const verifiedAt = new Date().toISOString();
 
   try {
-    const response = await fetch(`${REGISTRY_BASE_URL}/${encodedQrvid}`, {
+    const response = await fetch(`${VERIFY_API_BASE_URL}/${encodedQrvid}`, {
       method: 'GET',
       cache: 'no-store',
       headers: {
@@ -31,51 +46,56 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
     if (response.status === 404) {
       return {
         status: 'NOT_FOUND',
-        issuer: 'Unavailable',
-        recordType: 'Unavailable',
-        owner: 'Unavailable',
-        createdDate: 'Unavailable',
-        hash: 'Unavailable',
+        issuerName: 'Unavailable',
+        credentialTitle: 'Unavailable',
+        subjectDisplay: 'Unavailable',
+        issuedAt: 'Unavailable',
+        verifiedAt,
+        proofReference: 'Unavailable',
         qrvid,
       };
     }
 
     if (!response.ok) {
       return {
-        status: 'ERROR',
-        issuer: 'Unavailable',
-        recordType: 'Unavailable',
-        owner: 'Unavailable',
-        createdDate: 'Unavailable',
-        hash: 'Unavailable',
+        status: 'NOT_FOUND',
+        issuerName: 'Unavailable',
+        credentialTitle: 'Unavailable',
+        subjectDisplay: 'Unavailable',
+        issuedAt: 'Unavailable',
+        verifiedAt,
+        proofReference: 'Unavailable',
         qrvid,
       };
     }
 
     const data: Record<string, unknown> = await response.json();
-    const rawStatus = asText(data.status, 'ERROR').toUpperCase();
-    const status: VerifyStatus =
-      rawStatus === 'VERIFIED' || rawStatus === 'REVOKED' || rawStatus === 'EXPIRED'
-        ? rawStatus
-        : 'ERROR';
+    const issuerLogoUrl = typeof data.issuerLogoUrl === 'string'
+      ? data.issuerLogoUrl
+      : typeof data.issuer_logo_url === 'string'
+        ? data.issuer_logo_url
+        : undefined;
 
     return {
-      status,
-      issuer: asText(data.issuer),
-      recordType: asText(data.recordType ?? data.record_type),
-      owner: asText(data.owner),
-      createdDate: asText(data.createdDate ?? data.created_at),
-      hash: asText(data.hash),
+      status: normalizeStatus(data.status),
+      issuerName: asText(data.issuerName ?? data.issuer),
+      issuerLogoUrl,
+      credentialTitle: asText(data.credentialTitle ?? data.title),
+      subjectDisplay: asText(data.subjectDisplay ?? data.recipientName ?? data.subject),
+      issuedAt: asText(data.issuedAt ?? data.issueDate ?? data.created_at),
+      verifiedAt,
+      proofReference: deriveProofReference(data),
       qrvid: asText(data.qrvid, qrvid),
     };
   } catch {
     return {
-      status: 'ERROR',
-      issuer: 'Unavailable',
-      recordType: 'Unavailable',
-      owner: 'Unavailable',
-      createdDate: 'Unavailable',
-      hash: 'Unavailable',
+      status: 'NOT_FOUND',
+      issuerName: 'Unavailable',
+      credentialTitle: 'Unavailable',
+      subjectDisplay: 'Unavailable',
+      issuedAt: 'Unavailable',
+      verifiedAt,
+      proofReference: 'Unavailable',
       qrvid,
     };
   }

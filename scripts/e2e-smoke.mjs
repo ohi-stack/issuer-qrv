@@ -14,6 +14,13 @@ function apiHeaders() {
   };
 }
 
+async function checkIssuer() {
+  const res = await fetch(ISSUER_BASE_URL);
+  if (!res.ok) {
+    throw new Error(`GET ${ISSUER_BASE_URL} failed (${res.status})`);
+  }
+}
+
 async function callApi(path, init = {}) {
   const method = init.method || 'GET';
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -46,14 +53,21 @@ function normalizePublicStatus(payload) {
 }
 
 async function verifyPublic(qrvid) {
-  const verifyPath = `/${encodeURIComponent(qrvid)}`;
+  const verifyPath = `/verify/${encodeURIComponent(qrvid)}`;
   const res = await fetch(`${VERIFY_BASE_URL}${verifyPath}`);
 
-  if (!res.ok) {
-    throw new Error(`GET ${VERIFY_BASE_URL}${verifyPath} failed (${res.status})`);
+  const text = await res.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
   }
 
-  const payload = await res.json();
+  if (!res.ok) {
+    throw new Error(`GET ${VERIFY_BASE_URL}${verifyPath} failed (${res.status}): ${JSON.stringify(payload)}`);
+  }
+
   return normalizePublicStatus(payload);
 }
 
@@ -63,7 +77,7 @@ async function run() {
   }
 
   const runId = Date.now();
-
+  await checkIssuer();
   await callApi('/healthz');
   await callApi('/readyz');
 

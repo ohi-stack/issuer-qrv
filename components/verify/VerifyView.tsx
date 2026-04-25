@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { VerificationRecord, VerifyStatus } from '@/lib/verification';
 import { formatDate } from '@/lib/verification';
 
@@ -18,14 +19,9 @@ const STATUS_LABELS: Record<VerifyStatus, { text: string; className: string; mes
     message: 'This credential has expired and is no longer valid.',
   },
   NOT_FOUND: {
-    text: 'NOT FOUND',
+    text: 'NOT_FOUND',
     className: 'status-not-found',
     message: 'No matching registry record was found for this QRVID.',
-  },
-  ERROR: {
-    text: 'ERROR',
-    className: 'status-error',
-    message: 'We could not reach the registry. Please retry in a moment.',
   },
 };
 
@@ -54,12 +50,26 @@ export function VerifyView({ record }: Props) {
         </header>
         <p className="status-message">{status.message}</p>
 
+        <section className="issuer-row" aria-label="issuer profile">
+          {record.issuerLogoUrl ? (
+            <Image
+              className="issuer-logo"
+              src={record.issuerLogoUrl}
+              alt={`${record.issuerName} logo`}
+              width={42}
+              height={42}
+              unoptimized
+            />
+          ) : null}
+          <Field label="Issuer" value={record.issuerName} />
+        </section>
+
         <section className="fields-grid" aria-label="verification details">
-          <Field label="Issuer" value={record.issuer} />
-          <Field label="Record Type" value={record.recordType} />
-          <Field label="Owner" value={record.owner} />
-          <Field label="Created Date" value={formatDate(record.createdDate)} />
-          <Field label="Hash" value={record.hash} mono />
+          <Field label="Credential Title" value={record.credentialTitle} />
+          <Field label="Subject" value={record.subjectDisplay} />
+          <Field label="Issued Date" value={formatDate(record.issuedAt)} />
+          <Field label="Verification Timestamp" value={formatDate(record.verifiedAt)} />
+          <Field label="Hash / Proof Reference" value={record.proofReference} mono />
           <Field label="QRVID" value={record.qrvid} mono />
         </section>
       </section>
