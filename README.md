@@ -72,3 +72,16 @@ npm run dev
 npm run check
 npm test
 ```
+
+## App role routing
+
+This Next.js app supports two deployment roles via `NEXT_PUBLIC_APP_ROLE`:
+
+- `issuer` → `/` redirects to `/login` and issuer portal routes are available.
+- `verify` → `/` renders the public verification landing page and `/{qrvid}` renders public verification results.
+
+Verification records are fetched from:
+
+- `${NEXT_PUBLIC_QRV_API_BASE_URL}/api/v1/verify/{qrvid}`
+
+See `docs/verify-domain-deployment.md` for host/domain rollout steps.
