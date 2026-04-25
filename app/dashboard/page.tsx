@@ -22,9 +22,11 @@ export default function Dashboard(){
     { label: 'Core routes stable in production build', done: true },
     { label: 'Hostinger deployment compatibility', done: true },
     { label: 'Demo certificate QRV-PROD-CERT-000001 present', done: certs.some((c) => c.qrvid === 'QRV-PROD-CERT-000001') },
+    { label: 'Revoked demo certificate QRV-PROD-CERT-000002 present', done: certs.some((c) => c.qrvid === 'QRV-PROD-CERT-000002' && c.status === 'REVOKED') },
     { label: 'Public verify status is VERIFIED', done: true },
     { label: 'Revoke flow returns REVOKED', done: true },
-    { label: 'Issuer onboarding flow prepared', done: true }
+    { label: 'Issuer onboarding flow prepared', done: true },
+    { label: 'Launch demo + outreach materials ready', done: true }
   ];
   const completedChecks = readinessChecks.filter((c) => c.done).length;
   const readinessPercent = Math.round((completedChecks / readinessChecks.length) * 100);
@@ -45,7 +47,9 @@ export default function Dashboard(){
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Link className='btn' href='/onboarding'>Open issuer onboarding</Link>
         <Link className='btn secondary' href='/production-checklist'>Review production checklist</Link>
+        <Link className='btn secondary' href='/launch-demo'>Open launch demo page</Link>
         <Link className='btn secondary' href='https://verify.qrv.network/QRV-PROD-CERT-000001' target='_blank'>Verify demo certificate</Link>
+        <Link className='btn secondary' href='https://verify.qrv.network/QRV-PROD-CERT-000002' target='_blank'>Verify revoked demo certificate</Link>
       </div>
     </Card>
     {certs.length ? <RecentCertificatesTable records={certs} /> : <EmptyState title='No certificates yet' description='Issue your first certificate to populate dashboard activity.' />}

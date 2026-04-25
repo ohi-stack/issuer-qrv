@@ -12,6 +12,7 @@ Smoke script:
 - `QRV_API_BASE_URL` (default: `https://api.qrv.network`)
 - `QRV_VERIFY_BASE_URL` (default: `https://verify.qrv.network`)
 - `QRV_SMOKE_API_TOKEN` (recommended in non-local environments)
+- `QRV_ISSUER_BASE_URL` (default: `https://issuer.qrv.network`) for `smoke:external`
 
 Hostinger deployment:
 
@@ -39,6 +40,7 @@ Hostinger deployment:
 3. Deploy issuer portal (`issuer.qrv.network`) pointing to canonical API base URL.
 4. Validate public verification host (`verify.qrv.network`) for public states.
 5. Run smoke flow after deployment.
+6. Run `npm run smoke:external` against live domains.
 
 ## Smoke test criteria
 
@@ -50,6 +52,7 @@ Use `npm run smoke:e2e` and confirm the sequence:
 4. Verify public status transitions to `REVOKED`.
 5. Verify a missing id returns `NOT_FOUND`.
 6. Keep `QRV-PROD-CERT-000001` as a permanent public demo certificate for launch demos.
+7. Keep `QRV-PROD-CERT-000002` as a permanent public revoked demo certificate.
 
 Public verification statuses for end-user UI are limited to:
 
@@ -76,3 +79,10 @@ If smoke checks fail after a frontend deploy:
 3. Day 3: Validate onboarding handoff (`/onboarding`) with an internal issuer.
 4. Day 4-5: Share `QRV-PROD-CERT-000001` public verification URL in sales/demo materials.
 5. Day 6-7: Onboard first paying issuer and monitor analytics/audit logs.
+
+## Uptime monitoring minimums
+
+1. Monitor `/dashboard`, `/onboarding`, and `/production-checklist` on `issuer.qrv.network`.
+2. Monitor `/verify/QRV-PROD-CERT-000001` expecting `VERIFIED`.
+3. Monitor `/verify/QRV-PROD-CERT-000002` expecting `REVOKED`.
+4. Trigger pager/Slack alerts after 2 consecutive failures.

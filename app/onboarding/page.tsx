@@ -30,15 +30,32 @@ const steps = [
 ];
 
 export default function OnboardingPage() {
+  const exitCriteria = [
+    'Issuer profile approved with production support contact.',
+    'Production API key created and stored in secrets manager.',
+    'One live certificate verified publicly as VERIFIED.',
+    'One controlled certificate revocation verified publicly as REVOKED.',
+    'Monitoring alerts configured for issuer + verify domains.'
+  ];
+
   return <Card>
     <h1>Issuer Onboarding Flow</h1>
     <p>Use this guided flow to activate your first paying issuer inside 7 days.</p>
+    <p><strong>Target:</strong> move from signed contract to live verified certificate in 48 hours.</p>
     <div className='grid'>
       {steps.map((step) => <Card key={step.title}>
         <h3>{step.title}</h3>
         <p>{step.detail}</p>
         <Link className='btn' href={step.href}>Open step</Link>
       </Card>)}
+    </div>
+    <h3>Onboarding Exit Criteria</h3>
+    <ul>
+      {exitCriteria.map((criteria) => <li key={criteria}>{criteria}</li>)}
+    </ul>
+    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+      <Link className='btn' href='/launch-demo'>Launch demo page</Link>
+      <Link className='btn secondary' href='/production-checklist'>Production checklist</Link>
     </div>
   </Card>;
 }

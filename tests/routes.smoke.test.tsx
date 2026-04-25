@@ -15,6 +15,7 @@ import AuditLogsPage from '@/app/audit-logs/page';
 import SettingsPage from '@/app/settings/page';
 import OnboardingPage from '@/app/onboarding/page';
 import ProductionChecklistPage from '@/app/production-checklist/page';
+import LaunchDemoPage from '@/app/launch-demo/page';
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a href={String(href)} {...props}>{children}</a>
@@ -72,5 +73,10 @@ describe('route smoke tests', () => {
   it('renders /production-checklist', () => {
     render(<ProductionChecklistPage />);
     expect(screen.getByText('Production Checklist')).toBeInTheDocument();
+  });
+
+  it('renders /launch-demo', () => {
+    render(<LaunchDemoPage />);
+    expect(screen.getByText('Launch Demo Page')).toBeInTheDocument();
   });
 });

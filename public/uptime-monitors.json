@@ -1,0 +1,37 @@
+{
+  "environment": "qrv-issuer-production-convergence",
+  "monitors": [
+    {
+      "name": "issuer-dashboard",
+      "url": "https://issuer.qrv.network/dashboard",
+      "intervalSeconds": 120,
+      "expectedStatus": 200
+    },
+    {
+      "name": "issuer-onboarding",
+      "url": "https://issuer.qrv.network/onboarding",
+      "intervalSeconds": 120,
+      "expectedStatus": 200
+    },
+    {
+      "name": "issuer-production-checklist",
+      "url": "https://issuer.qrv.network/production-checklist",
+      "intervalSeconds": 120,
+      "expectedStatus": 200
+    },
+    {
+      "name": "verify-demo-verified",
+      "url": "https://verify.qrv.network/verify/QRV-PROD-CERT-000001",
+      "intervalSeconds": 60,
+      "expectedStatus": 200,
+      "expectedBodyContains": "VERIFIED"
+    },
+    {
+      "name": "verify-demo-revoked",
+      "url": "https://verify.qrv.network/verify/QRV-PROD-CERT-000002",
+      "intervalSeconds": 60,
+      "expectedStatus": 200,
+      "expectedBodyContains": "REVOKED"
+    }
+  ]
+}
