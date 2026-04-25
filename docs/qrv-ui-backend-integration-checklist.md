@@ -13,6 +13,13 @@ Smoke script:
 - `QRV_VERIFY_BASE_URL` (default: `https://verify.qrv.network`)
 - `QRV_SMOKE_API_TOKEN` (recommended in non-local environments)
 
+Hostinger deployment:
+
+- Node.js runtime: 20.x LTS or newer
+- Build command: `npm ci && npm run build`
+- Start command: `npm run start`
+- Required domain mappings: `issuer.qrv.network` (portal), `verify.qrv.network` (public verification)
+
 ## Local run instructions
 
 1. Install dependencies:
@@ -42,6 +49,7 @@ Use `npm run smoke:e2e` and confirm the sequence:
 3. Revoke certificate through `POST /certificates/{qrvid}/revoke`.
 4. Verify public status transitions to `REVOKED`.
 5. Verify a missing id returns `NOT_FOUND`.
+6. Keep `QRV-PROD-CERT-000001` as a permanent public demo certificate for launch demos.
 
 Public verification statuses for end-user UI are limited to:
 
@@ -60,3 +68,11 @@ If smoke checks fail after a frontend deploy:
 2. Keep backend live if API health and registry persistence remain stable.
 3. Re-run `npm test` and `npm run build` in CI with deployed API contract fixtures.
 4. Re-deploy frontend only after route smoke tests and API client tests pass.
+
+## Pilot launch target (7-day path to first paying issuer)
+
+1. Day 1: Confirm Hostinger env and deploy latest build.
+2. Day 2: Run smoke flow and validate `VERIFIED` + `REVOKED` public status transitions.
+3. Day 3: Validate onboarding handoff (`/onboarding`) with an internal issuer.
+4. Day 4-5: Share `QRV-PROD-CERT-000001` public verification URL in sales/demo materials.
+5. Day 6-7: Onboard first paying issuer and monitor analytics/audit logs.

@@ -2,13 +2,14 @@
 
 Minimal Node.js starter for the QR-V Issuer service.
 
-## Routes
+## Core routes
 
-/  
-Returns a health message.
-
-/verify/:id  
-Example verification endpoint for QR-V records.
+- `/dashboard` — issuer metrics + launch readiness.
+- `/onboarding` — first paying issuer onboarding flow.
+- `/production-checklist` — deployment and go-live checklist.
+- `/certificates` — certificate inventory.
+- `/certificates/new` — issue certificate wizard.
+- `/revocations` — revoke and confirm public REVOKED state.
 
 ## Run locally
 

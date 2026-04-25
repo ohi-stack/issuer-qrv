@@ -2,7 +2,7 @@ import { ApiKeyRecord, AuditEvent, CertificateRecord } from '@/types/models';
 
 const now = new Date().toISOString();
 export const mockCertificates: CertificateRecord[] = [
-  { id:'1', qrvid:'QRV-CERT-2026-0001', recordType:'certificate', issuerId:'iss-1', issuerName:'QRV Academy', recipientName:'Ava Lee', recipientEmail:'ava@example.com', certificateTitle:'Compliance Fundamentals', certificateType:'Completion', description:'Training cert', issueDate:now, expirationDate:null, privacyLevel:'PUBLIC', status:'VERIFIED', verificationUrl:'https://verify.qrv.network/QRV-CERT-2026-0001', hash:'a4e9b2', signature:'sig-1', verificationCount:12, createdAt:now, updatedAt:now },
+  { id:'1', qrvid:'QRV-PROD-CERT-000001', recordType:'certificate', issuerId:'iss-1', issuerName:'QRV Academy', recipientName:'Pilot Demo Holder', recipientEmail:'pilot-demo@qrv.network', certificateTitle:'QRV Production Pilot Certificate', certificateType:'Production Demo', description:'Permanent demo certificate for public pilot launch readiness checks.', issueDate:now, expirationDate:null, privacyLevel:'PUBLIC', status:'VERIFIED', verificationUrl:'https://verify.qrv.network/QRV-PROD-CERT-000001', hash:'a4e9b2', signature:'sig-1', verificationCount:12, createdAt:now, updatedAt:now },
   { id:'2', qrvid:'QRV-CERT-2026-0002', recordType:'certificate', issuerId:'iss-1', issuerName:'QRV Academy', recipientName:'Noah Kim', certificateTitle:'Safety Essentials', issueDate:now, expirationDate:null, privacyLevel:'RESTRICTED', status:'REVOKED', verificationUrl:'https://verify.qrv.network/QRV-CERT-2026-0002', hash:'b6c2d1', verificationCount:2, createdAt:now, updatedAt:now, revokedAt:now, revocationReason:'Issued in error' }
 ];
 

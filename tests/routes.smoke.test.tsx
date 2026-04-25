@@ -13,6 +13,8 @@ import IssuerProfilePage from '@/app/issuer-profile/page';
 import ApiKeysPage from '@/app/api-keys/page';
 import AuditLogsPage from '@/app/audit-logs/page';
 import SettingsPage from '@/app/settings/page';
+import OnboardingPage from '@/app/onboarding/page';
+import ProductionChecklistPage from '@/app/production-checklist/page';
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a href={String(href)} {...props}>{children}</a>
@@ -60,5 +62,15 @@ describe('route smoke tests', () => {
   it('renders /settings', () => {
     render(<SettingsPage />);
     expect(screen.getByText('Settings')).toBeInTheDocument();
+  });
+
+  it('renders /onboarding', () => {
+    render(<OnboardingPage />);
+    expect(screen.getByText('Issuer Onboarding Flow')).toBeInTheDocument();
+  });
+
+  it('renders /production-checklist', () => {
+    render(<ProductionChecklistPage />);
+    expect(screen.getByText('Production Checklist')).toBeInTheDocument();
   });
 });
