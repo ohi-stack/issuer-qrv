@@ -6,12 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "NODE_ENV=development next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke:e2e": "node scripts/e2e-smoke.mjs",
     "smoke:external": "node scripts/external-smoke.mjs"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "validate:prod": "node scripts/validate-prod.mjs"
   },
   "dependencies": {
     "next": "15.3.1",
@@ -21,13 +23,13 @@
   "devDependencies": {
     "@testing-library/jest-dom": "6.7.0",
     "@testing-library/react": "16.3.0",
-    "@types/node": "22.15.17",
-    "@types/react": "19.0.12",
+    "@types/node": "22.19.17",
+    "@types/react": "19.2.14",
     "@types/react-dom": "19.0.4",
     "eslint": "9.25.0",
     "eslint-config-next": "15.3.1",
     "jsdom": "26.1.0",
-    "typescript": "5.8.3",
+    "typescript": "5.9.3",
     "vitest": "3.2.4"
   }
 }

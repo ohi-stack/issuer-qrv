@@ -158,6 +158,16 @@
       padding: 14px;
       overflow: auto;
     }
+    
+    .issuer-logo {
+      width: 36px;
+      height: 36px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid rgba(120,195,255,.2);
+      background: rgba(255,255,255,.06);
+    }
+
     .footer {
       color: #9bb6d6;
       font-size: 12px;
@@ -187,15 +197,17 @@
           <h2>Record summary</h2>
           <div class="row"><div class="k">QRVID</div><div class="v" id="qrvid">—</div></div>
           <div class="row"><div class="k">Status</div><div class="v" id="recordStatus">—</div></div>
-          <div class="row"><div class="k">Type</div><div class="v" id="recordType">—</div></div>
+          <div class="row"><div class="k">Credential</div><div class="v" id="credentialTitle">—</div></div>
           <div class="row"><div class="k">Issuer</div><div class="v" id="issuer">—</div></div>
-          <div class="row"><div class="k">Owner</div><div class="v" id="owner">—</div></div>
+          <div class="row"><div class="k">Issuer logo</div><div class="v" id="issuerLogoWrap">—</div></div>
+          <div class="row"><div class="k">Recipient / subject</div><div class="v" id="subject">—</div></div>
+          <div class="row"><div class="k">Issued</div><div class="v" id="issuedDate">—</div></div>
         </section>
 
         <section class="panel">
           <h2>Verification details</h2>
-          <div class="row"><div class="k">Timestamp</div><div class="v" id="timestamp">—</div></div>
-          <div class="row"><div class="k">Hash</div><div class="v" id="hash">—</div></div>
+          <div class="row"><div class="k">Verification time</div><div class="v" id="timestamp">—</div></div>
+          <div class="row"><div class="k">Hash / proof ref</div><div class="v" id="hash">—</div></div>
           <div class="row"><div class="k">API Source</div><div class="v" id="apiSource">—</div></div>
           <div class="row"><div class="k">Decision</div><div class="v" id="decision">—</div></div>
         </section>
@@ -229,11 +241,29 @@
       document.getElementById(id).textContent = value || '—'
     }
 
+    function sanitizeStatus(status) {
+      const allowed = ['VERIFIED', 'REVOKED', 'EXPIRED', 'NOT_FOUND']
+      return allowed.includes(status) ? status : 'NOT_FOUND'
+    }
+
     function decisionLabel(status) {
       if (status === 'VERIFIED') return 'Trusted — proceed'
       if (status === 'REVOKED') return 'Revoked — reject'
       if (status === 'EXPIRED') return 'Expired — reject'
       return 'Not found — reject'
+    }
+
+    function renderIssuerLogo(url) {
+      const wrap = document.getElementById('issuerLogoWrap')
+      if (!url) {
+        wrap.textContent = '—'
+        return
+      }
+      const img = document.createElement('img')
+      img.className = 'issuer-logo'
+      img.alt = 'Issuer logo'
+      img.src = url
+      wrap.replaceChildren(img)
     }
 
     async function verify() {
@@ -245,6 +275,11 @@
         setStatus('invalid', 'Invalid request')
         setText('recordStatus', 'NOT_FOUND')
         setText('decision', 'Not found — reject')
+        setText('credentialTitle', '—')
+        setText('issuer', '—')
+        renderIssuerLogo('')
+        setText('subject', '—')
+        setText('issuedDate', '—')
         setText('proof', JSON.stringify({ error: 'Missing QRVID in path' }, null, 2))
         return
       }
@@ -253,22 +288,29 @@
         const res = await fetch(`${API_BASE}/verify/${encodeURIComponent(qrvid)}`)
         const data = await res.json()
 
-        const status = data.status || 'NOT_FOUND'
+        const status = sanitizeStatus(data.status || 'NOT_FOUND')
         const isVerified = status === 'VERIFIED'
 
         setStatus(isVerified ? 'verified' : 'invalid', isVerified ? 'Verified registry result' : 'Verification failed')
         setText('recordStatus', status)
-        setText('recordType', data.recordType || data.record_type || '—')
-        setText('issuer', data.issuer || '—')
-        setText('owner', data.owner || data.subject || '—')
-        setText('timestamp', data.timestamp || '—')
-        setText('hash', data.hash || '—')
+        setText('credentialTitle', data.credentialTitle || data.title || '—')
+        setText('issuer', data.issuerName || data.issuer || '—')
+        renderIssuerLogo(data.issuerLogoUrl || data.issuer_logo_url || '')
+        setText('subject', data.recipientDisplay || data.recipientName || data.subjectDisplay || data.subject || '—')
+        setText('issuedDate', data.issuedAt || data.issueDate || data.issued_date || '—')
+        setText('timestamp', data.verifiedAt || data.timestamp || new Date().toISOString())
+        setText('hash', data.hash || data.proofRef || data.proof_reference || '—')
         setText('decision', decisionLabel(status))
         setText('proof', JSON.stringify(data, null, 2))
       } catch (err) {
         setStatus('invalid', 'Verification unavailable')
         setText('recordStatus', 'NOT_FOUND')
         setText('decision', 'Unable to verify — reject')
+        setText('credentialTitle', '—')
+        setText('issuer', '—')
+        renderIssuerLogo('')
+        setText('subject', '—')
+        setText('issuedDate', '—')
         setText('proof', JSON.stringify({ error: err.message || 'Verification request failed' }, null, 2))
       }
     }

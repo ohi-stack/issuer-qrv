@@ -6,29 +6,40 @@ const { Pool } = require('pg');
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.ADMIN_API_KEY;
 const ISSUER_TOKEN = process.env.ISSUER_TOKEN || process.env.ISSUER_API_KEY_SECRET;
-function validateEnv() {
-  const missing = [];
-  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
-  if (!ADMIN_TOKEN) missing.push('ADMIN_TOKEN|ADMIN_API_KEY');
-  if (!ISSUER_TOKEN) missing.push('ISSUER_TOKEN|ISSUER_API_KEY_SECRET');
-  if (missing.length) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
-  }
-}
+const JWT_SECRET = process.env.JWT_SECRET || process.env.ISSUER_JWT_SECRET;
+const SIGNING_SECRET = process.env.SIGNING_SECRET || process.env.QRV_SIGNING_SECRET;
 
-validateEnv();
-if (!process.env.ADMIN_TOKEN && process.env.ADMIN_API_KEY) {
-  console.warn('[config] ADMIN_API_KEY is deprecated, prefer ADMIN_TOKEN');
-}
-if (!process.env.ISSUER_TOKEN && process.env.ISSUER_API_KEY_SECRET) {
-  console.warn('[config] ISSUER_API_KEY_SECRET is deprecated, prefer ISSUER_TOKEN');
-}
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PRODUCTION = NODE_ENV === 'production';
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://issuer.qrv.network';
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 100);
+
+if (!process.env.ADMIN_TOKEN && process.env.ADMIN_API_KEY) {
+  console.warn('[config] ADMIN_API_KEY is deprecated, prefer ADMIN_TOKEN');
+}
+if (!process.env.ISSUER_TOKEN && process.env.ISSUER_API_KEY_SECRET) {
+  console.warn('[config] ISSUER_API_KEY_SECRET is deprecated, prefer ISSUER_TOKEN');
+}
+if (!process.env.JWT_SECRET && process.env.ISSUER_JWT_SECRET) {
+  console.warn('[config] ISSUER_JWT_SECRET is deprecated, prefer JWT_SECRET');
+}
+if (!process.env.SIGNING_SECRET && process.env.QRV_SIGNING_SECRET) {
+  console.warn('[config] QRV_SIGNING_SECRET is deprecated, prefer SIGNING_SECRET');
+}
+
+function getConfigIssues() {
+  const issues = [];
+  if (!process.env.DATABASE_URL) issues.push('DATABASE_URL is missing');
+  if (!SIGNING_SECRET) issues.push('SIGNING_SECRET is missing');
+  if (!ISSUER_TOKEN) issues.push('ISSUER_TOKEN (or ISSUER_API_KEY_SECRET) is missing');
+  if (!JWT_SECRET) issues.push('JWT_SECRET (or ISSUER_JWT_SECRET) is missing');
+  if (!ADMIN_TOKEN) issues.push('ADMIN_TOKEN (or ADMIN_API_KEY) is missing');
+  return issues;
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -95,6 +106,12 @@ function authByToken(expectedToken) {
 const adminAuth = authByToken(ADMIN_TOKEN);
 const issuerAuth = authByToken(ISSUER_TOKEN);
 
+function assertNoProdMemoryFallback() {
+  if (IS_PRODUCTION) {
+    throw new Error('In-memory fallback is disabled in production');
+  }
+}
+
 async function auditLog(eventType, details) {
   const payload = {
     eventType,
@@ -142,7 +159,10 @@ async function migrateCertificateV1() {
       ALTER TABLE registry_records
       ADD COLUMN IF NOT EXISTS certificate_version integer NOT NULL DEFAULT 1;
     `);
-  } catch (_error) {
+  } catch (error) {
+    if (IS_PRODUCTION) {
+      throw new Error(`[db] migration failed in production: ${error.message}`);
+    }
     console.warn('[db] migration skipped, falling back to in-memory mode');
   }
 }
@@ -151,7 +171,10 @@ async function readRecordById(qrvid) {
   try {
     const result = await pool.query('SELECT * FROM registry_records WHERE qrvid = $1', [qrvid]);
     return result.rows[0] || memoryRecords.get(qrvid);
-  } catch (_error) {
+  } catch (error) {
+    if (IS_PRODUCTION) {
+      throw new Error(`[db] read failed in production: ${error.message}`);
+    }
     return memoryRecords.get(qrvid);
   }
 }
@@ -160,16 +183,49 @@ app.get('/', (_req, res) => {
   res.send('QR-V Issuer Portal Running');
 });
 
+app.get('/healthz', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), environment: NODE_ENV });
+});
+
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+  res.json({ status: 'ok', uptime: process.uptime(), environment: NODE_ENV });
+});
+
+app.get('/readyz', async (_req, res) => {
+  const issues = [...getConfigIssues()];
+
+  if (IS_PRODUCTION && memoryRecords.size > 0) {
+    issues.push('Mock/in-memory records detected in production runtime');
+  }
+
+  if (issues.length > 0) {
+    return res.status(503).json({ ready: false, database: 'unknown', issues });
+  }
+
+  try {
+    await pool.query('SELECT 1');
+    return res.json({ ready: true, database: 'ok', issues: [] });
+  } catch (error) {
+    return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
+  }
 });
 
 app.get('/ready', async (_req, res) => {
+  const issues = [...getConfigIssues()];
+
+  if (IS_PRODUCTION && memoryRecords.size > 0) {
+    issues.push('Mock/in-memory records detected in production runtime');
+  }
+
+  if (issues.length > 0) {
+    return res.status(503).json({ ready: false, database: 'unknown', issues });
+  }
+
   try {
     await pool.query('SELECT 1');
-    res.json({ ready: true, database: 'ok' });
-  } catch (_error) {
-    res.status(503).json({ ready: false, database: 'unavailable' });
+    return res.json({ ready: true, database: 'ok', issues: [] });
+  } catch (error) {
+    return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
 
@@ -201,7 +257,10 @@ async function createRegistryRecord(req, res) {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [record.qrvid, record.title, record.subject, record.issuer, record.status, record.certificate_version]
     );
-  } catch (_error) {
+  } catch (error) {
+    if (IS_PRODUCTION) {
+      return res.status(503).json({ error: `Database unavailable for create: ${error.message}` });
+    }
     memoryRecords.set(qrvid, record);
   }
 
@@ -245,10 +304,16 @@ async function revokeRegistryRecord(req, res, qrvid) {
       );
       recordFound = Boolean(updateResult.rows[0]);
     } catch (_error) {
-      // fall back to memory
+      if (IS_PRODUCTION) {
+        return res.status(503).json({ error: 'Database unavailable for revoke' });
+      }
     }
 
     if (!recordFound) {
+      if (IS_PRODUCTION) {
+        assertNoProdMemoryFallback();
+      }
+
       const memoryRecord = memoryRecords.get(qrvid);
       if (!memoryRecord) {
         return res.status(404).json({ error: 'Record not found' });
@@ -321,5 +386,6 @@ module.exports = {
   app,
   start,
   migrateCertificateV1,
-  runProductionSmokeCheck
+  runProductionSmokeCheck,
+  getConfigIssues
 };
