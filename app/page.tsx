@@ -1,5 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getAppRole } from '@/lib/app-role';
+
+export default function HomePage() {
+  const appRole = getAppRole();
+
+  if (appRole === 'issuer') {
 import { isIssuerRole } from '@/lib/app-role';
 
 export default function HomePage() {
