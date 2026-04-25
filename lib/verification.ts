@@ -32,6 +32,19 @@ function deriveProofReference(data: Record<string, unknown>) {
   return asText(data.hash ?? data.proofReference ?? data.proof_reference, 'Unavailable');
 }
 
+function getUnavailableRecord(qrvid: string, verifiedAt: string): VerificationRecord {
+  return {
+    status: 'NOT_FOUND',
+    issuerName: 'Unavailable',
+    credentialTitle: 'Unavailable',
+    subjectDisplay: 'Unavailable',
+    issuedAt: 'Unavailable',
+    verifiedAt,
+    proofReference: 'Unavailable',
+    qrvid,
+  };
+}
+
 export async function fetchVerification(qrvid: string): Promise<VerificationRecord> {
   const encodedQrvid = encodeURIComponent(qrvid.trim());
   const verifiedAt = new Date().toISOString();
@@ -72,6 +85,8 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
         qrvid,
         apiUnavailable: true,
       };
+    if (!response.ok) {
+      return getUnavailableRecord(qrvid, verifiedAt);
     }
 
     const rawJson = (await response.json()) as Record<string, unknown>;
@@ -108,6 +123,7 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       qrvid,
       apiUnavailable: true,
     };
+    return getUnavailableRecord(qrvid, verifiedAt);
   }
 }
 
