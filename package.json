@@ -2,23 +2,30 @@
   "name": "issuer-qrv",
   "version": "1.0.0",
   "private": true,
+  "main": "server.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:server": "node server.js",
     "lint": "NODE_ENV=development next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke:e2e": "node scripts/e2e-smoke.mjs",
-    "smoke:external": "node scripts/external-smoke.mjs"
+    "smoke:external": "node scripts/external-smoke.mjs",
     "check": "npm run lint && npm run typecheck && npm test",
     "validate:prod": "node scripts/validate-prod.mjs"
   },
   "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
     "next": "15.3.1",
+    "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.7.0",
