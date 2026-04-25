@@ -11,6 +11,7 @@ This repository contains the QR-V issuer portal, API service entrypoint, and pub
 - `/certificates` — certificate inventory.
 - `/certificates/new` — issue certificate wizard.
 - `/revocations` — revoke and confirm public REVOKED state.
+
 ## Production services
 
 - Issuer portal: `https://issuer.qrv.network`
@@ -57,14 +58,13 @@ The smoke flow validates:
 
 ```bash
 npm install
-npm start
+npm run dev
+```
 
 ## Smoke commands
 
 - `npm run smoke:e2e` (API + verify flow)
 - `npm run smoke:external` (live domain route + verify checks)
-npm run dev
-```
 
 ## Quality gates
 

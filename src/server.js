@@ -170,7 +170,9 @@ async function migrateCertificateV1() {
 async function readRecordById(qrvid) {
   try {
     const result = await pool.query('SELECT * FROM registry_records WHERE qrvid = $1', [qrvid]);
-    return result.rows[0] || memoryRecords.get(qrvid);
+    if (result.rows[0]) return result.rows[0];
+    if (IS_PRODUCTION) return null;
+    return memoryRecords.get(qrvid);
   } catch (error) {
     if (IS_PRODUCTION) {
       throw new Error(`[db] read failed in production: ${error.message}`);
