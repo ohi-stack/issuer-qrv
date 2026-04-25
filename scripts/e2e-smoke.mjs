@@ -1,100 +1,114 @@
 #!/usr/bin/env node
 
-const API_BASE = process.env.QRV_API_BASE_URL || 'https://api.qrv.network';
-const VERIFY_BASE = process.env.QRV_VERIFY_BASE_URL || 'https://verify.qrv.network';
+const ISSUER_BASE_URL = process.env.ISSUER_BASE_URL || 'https://issuer.qrv.network';
+const API_BASE_URL = process.env.API_BASE_URL || 'https://api.qrv.network';
+const VERIFY_BASE_URL = process.env.VERIFY_BASE_URL || 'https://verify.qrv.network';
+const SMOKE_API_KEY = process.env.SMOKE_API_KEY;
+const SMOKE_JWT = process.env.SMOKE_JWT;
 
-function headers() {
-  const token = process.env.QRV_SMOKE_API_TOKEN;
+function apiHeaders() {
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
+    ...(SMOKE_API_KEY ? { 'x-api-key': SMOKE_API_KEY } : {}),
+    ...(SMOKE_JWT ? { Authorization: `Bearer ${SMOKE_JWT}` } : {})
   };
 }
 
-async function call(path, init = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+async function callApi(path, init = {}) {
+  const method = init.method || 'GET';
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: { ...headers(), ...(init.headers || {}) }
+    headers: { ...apiHeaders(), ...(init.headers || {}) }
   });
 
   const text = await res.text();
-  let body = null;
+  let payload = null;
   try {
-    body = text ? JSON.parse(text) : null;
+    payload = text ? JSON.parse(text) : null;
   } catch {
-    body = { raw: text };
+    payload = { raw: text };
   }
 
   if (!res.ok) {
-    throw new Error(`${init.method || 'GET'} ${path} failed (${res.status}): ${JSON.stringify(body)}`);
+    throw new Error(`${method} ${path} failed (${res.status}): ${JSON.stringify(payload)}`);
   }
 
-  return body;
+  return payload;
 }
 
-function getPublicStatus(payload) {
-  const status = payload?.status;
+function normalizePublicStatus(payload) {
   const allowed = ['VERIFIED', 'REVOKED', 'EXPIRED', 'NOT_FOUND'];
+  const status = payload?.status;
   if (!allowed.includes(status)) {
-    throw new Error(`Unexpected public status '${status}'. Expected one of ${allowed.join(', ')}.`);
+    throw new Error(`Unexpected public status '${status}'. Allowed states: ${allowed.join(', ')}`);
   }
   return status;
 }
 
 async function verifyPublic(qrvid) {
-  const verifyPath = `/verify/${encodeURIComponent(qrvid)}`;
-  const res = await fetch(`${VERIFY_BASE}${verifyPath}`);
+  const verifyPath = `/${encodeURIComponent(qrvid)}`;
+  const res = await fetch(`${VERIFY_BASE_URL}${verifyPath}`);
+
   if (!res.ok) {
-    throw new Error(`GET ${VERIFY_BASE}${verifyPath} failed (${res.status})`);
+    throw new Error(`GET ${VERIFY_BASE_URL}${verifyPath} failed (${res.status})`);
   }
 
   const payload = await res.json();
-  return getPublicStatus(payload);
+  return normalizePublicStatus(payload);
 }
 
 async function run() {
-  const runId = Date.now();
-  const recipientName = `Smoke Test ${runId}`;
+  if (!SMOKE_API_KEY || !SMOKE_JWT) {
+    throw new Error('SMOKE_API_KEY and SMOKE_JWT are both required for production smoke runs.');
+  }
 
-  const created = await call('/certificates', {
+  const runId = Date.now();
+
+  await callApi('/healthz');
+  await callApi('/readyz');
+
+  const created = await callApi('/certificates', {
     method: 'POST',
     body: JSON.stringify({
-      certificateTitle: 'QRV Integration Smoke Test',
+      certificateTitle: 'QRV Live Domain Smoke Test',
       issueDate: new Date().toISOString(),
-      recipientName,
+      recipientName: `Live Smoke ${runId}`,
       privacyLevel: 'PUBLIC'
     })
   });
 
   const qrvid = created?.qrvid;
-  if (!qrvid) throw new Error('Certificate create response did not contain qrvid.');
+  if (!qrvid) {
+    throw new Error('Certificate create response is missing qrvid.');
+  }
 
   const verifiedStatus = await verifyPublic(qrvid);
   if (verifiedStatus !== 'VERIFIED') {
-    throw new Error(`Expected VERIFIED immediately after issuance, got ${verifiedStatus}.`);
+    throw new Error(`Expected VERIFIED after create, got ${verifiedStatus}.`);
   }
 
-  await call(`/certificates/${encodeURIComponent(qrvid)}/revoke`, {
+  await callApi(`/certificates/${encodeURIComponent(qrvid)}/revoke`, {
     method: 'POST',
-    body: JSON.stringify({ reason: 'Smoke test cleanup' })
+    body: JSON.stringify({ reason: 'Launch-week smoke revoke' })
   });
 
   const revokedStatus = await verifyPublic(qrvid);
   if (revokedStatus !== 'REVOKED') {
-    throw new Error(`Expected REVOKED after revocation, got ${revokedStatus}.`);
+    throw new Error(`Expected REVOKED after revoke, got ${revokedStatus}.`);
   }
 
-  const missingStatus = await verifyPublic(`MISSING-${runId}`);
+  const missingQrvid = `MISSING-${runId}`;
+  const missingStatus = await verifyPublic(missingQrvid);
   if (missingStatus !== 'NOT_FOUND') {
-    throw new Error(`Expected NOT_FOUND for missing certificate, got ${missingStatus}.`);
+    throw new Error(`Expected NOT_FOUND for missing qrvid, got ${missingStatus}.`);
   }
 
-  console.log('Smoke flow passed');
-  console.log(JSON.stringify({ qrvid, verifiedStatus, revokedStatus, missingStatus }, null, 2));
+  console.log('QR-V live-domain smoke passed');
+  console.log(JSON.stringify({ ISSUER_BASE_URL, API_BASE_URL, VERIFY_BASE_URL, qrvid, verifiedStatus, revokedStatus, missingStatus }, null, 2));
 }
 
 run().catch((error) => {
-  console.error('Smoke flow failed');
+  console.error('QR-V live-domain smoke failed');
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });
