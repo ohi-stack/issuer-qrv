@@ -2,6 +2,15 @@
 
 This repository contains the QR-V issuer portal, API service entrypoint, and public verification assets used for live-domain production launch checks.
 
+## Core routes
+
+- `/dashboard` — issuer metrics + launch readiness.
+- `/onboarding` — first paying issuer onboarding flow.
+- `/production-checklist` — deployment and go-live checklist.
+- `/launch-demo` — live demo run-of-show and outreach links.
+- `/certificates` — certificate inventory.
+- `/certificates/new` — issue certificate wizard.
+- `/revocations` — revoke and confirm public REVOKED state.
 ## Production services
 
 - Issuer portal: `https://issuer.qrv.network`
@@ -48,6 +57,12 @@ The smoke flow validates:
 
 ```bash
 npm install
+npm start
+
+## Smoke commands
+
+- `npm run smoke:e2e` (API + verify flow)
+- `npm run smoke:external` (live domain route + verify checks)
 npm run dev
 ```
 
