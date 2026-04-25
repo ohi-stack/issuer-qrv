@@ -1,6 +1,14 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getAppRole } from '@/lib/app-role';
 
 export default function HomePage() {
+  const appRole = getAppRole();
+
+  if (appRole === 'issuer') {
+    redirect('/login');
+  }
+
   return (
     <main className="page-wrap">
       <section className="verify-card hero-card">
