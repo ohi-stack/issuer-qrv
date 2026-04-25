@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { VerifyView } from '@/components/verify/VerifyView';
+import { isIssuerRole } from '@/lib/app-role';
 import { fetchVerification } from '@/lib/verification';
 
 type Params = { qrvid: string };
@@ -18,6 +19,10 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 }
 
 export default async function VerifyRoute({ params }: { params: Promise<Params> }) {
+  if (isIssuerRole()) {
+    notFound();
+  }
+
   const { qrvid } = await params;
 
   if (!qrvid?.trim()) {

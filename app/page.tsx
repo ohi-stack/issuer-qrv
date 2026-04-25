@@ -6,6 +6,10 @@ export default function HomePage() {
   const appRole = getAppRole();
 
   if (appRole === 'issuer') {
+import { isIssuerRole } from '@/lib/app-role';
+
+export default function HomePage() {
+  if (isIssuerRole()) {
     redirect('/login');
   }
 
@@ -18,7 +22,7 @@ export default function HomePage() {
           Open a verification URL in the format <span className="mono">/your-qrvid</span> to view
           issuer, ownership, hash, and status details directly from the QRV registry.
         </p>
-        <Link href="/sample-qrvid" className="primary-link" prefetch={false}>
+        <Link href="/QRV-PROD-CERT-000001" className="primary-link" prefetch={false}>
           Try sample route
         </Link>
       </section>

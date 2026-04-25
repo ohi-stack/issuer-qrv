@@ -12,7 +12,7 @@ export type VerificationRecord = {
   qrvid: string;
 };
 
-const VERIFY_API_BASE_URL = process.env.NEXT_PUBLIC_QRV_VERIFY_API_BASE_URL ?? 'https://api.qrv.network/verify';
+const VERIFY_API_BASE_URL = process.env.NEXT_PUBLIC_QRV_API_BASE_URL ?? 'https://api.qrv.network';
 
 function asText(value: unknown, fallback = 'Unavailable') {
   return typeof value === 'string' && value.trim() ? value : fallback;
@@ -30,12 +30,25 @@ function deriveProofReference(data: Record<string, unknown>) {
   return asText(data.hash ?? data.proofReference ?? data.proof_reference, 'Unavailable');
 }
 
+function getUnavailableRecord(qrvid: string, verifiedAt: string): VerificationRecord {
+  return {
+    status: 'NOT_FOUND',
+    issuerName: 'Unavailable',
+    credentialTitle: 'Unavailable',
+    subjectDisplay: 'Unavailable',
+    issuedAt: 'Unavailable',
+    verifiedAt,
+    proofReference: 'Unavailable',
+    qrvid,
+  };
+}
+
 export async function fetchVerification(qrvid: string): Promise<VerificationRecord> {
   const encodedQrvid = encodeURIComponent(qrvid.trim());
   const verifiedAt = new Date().toISOString();
 
   try {
-    const response = await fetch(`${VERIFY_API_BASE_URL}/${encodedQrvid}`, {
+    const response = await fetch(`${VERIFY_API_BASE_URL}/api/v1/verify/${encodedQrvid}`, {
       method: 'GET',
       cache: 'no-store',
       headers: {
@@ -43,30 +56,8 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       },
     });
 
-    if (response.status === 404) {
-      return {
-        status: 'NOT_FOUND',
-        issuerName: 'Unavailable',
-        credentialTitle: 'Unavailable',
-        subjectDisplay: 'Unavailable',
-        issuedAt: 'Unavailable',
-        verifiedAt,
-        proofReference: 'Unavailable',
-        qrvid,
-      };
-    }
-
     if (!response.ok) {
-      return {
-        status: 'NOT_FOUND',
-        issuerName: 'Unavailable',
-        credentialTitle: 'Unavailable',
-        subjectDisplay: 'Unavailable',
-        issuedAt: 'Unavailable',
-        verifiedAt,
-        proofReference: 'Unavailable',
-        qrvid,
-      };
+      return getUnavailableRecord(qrvid, verifiedAt);
     }
 
     const data: Record<string, unknown> = await response.json();
@@ -88,16 +79,7 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       qrvid: asText(data.qrvid, qrvid),
     };
   } catch {
-    return {
-      status: 'NOT_FOUND',
-      issuerName: 'Unavailable',
-      credentialTitle: 'Unavailable',
-      subjectDisplay: 'Unavailable',
-      issuedAt: 'Unavailable',
-      verifiedAt,
-      proofReference: 'Unavailable',
-      qrvid,
-    };
+    return getUnavailableRecord(qrvid, verifiedAt);
   }
 }
 
