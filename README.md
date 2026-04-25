@@ -10,6 +10,7 @@ This repository contains the QR-V issuer portal, API service entrypoint, and pub
 - `/launch-demo` — live demo run-of-show and outreach links.
 - `/certificates` — certificate inventory.
 - `/certificates/new` — issue certificate wizard.
+- `/revocations` — revoke and confirm public `REVOKED` state.
 - `/revocations` — revoke and confirm public REVOKED state.
 
 ## Production services
@@ -17,6 +18,22 @@ This repository contains the QR-V issuer portal, API service entrypoint, and pub
 - Issuer portal: `https://issuer.qrv.network`
 - API service: `https://api.qrv.network`
 - Public verification: `https://verify.qrv.network/{qrvid}`
+
+## Production environment variables
+
+Copy `.env.example` into your Hostinger project env settings (or local `.env.local`) and provide real secrets:
+
+- `DATABASE_URL`
+- `SIGNING_SECRET`
+- `ISSUER_TOKEN`
+- `JWT_SECRET`
+- `ADMIN_TOKEN`
+
+Validate before deploy:
+
+```bash
+npm run validate:prod
+```
 
 ## First production seed record
 
@@ -70,7 +87,6 @@ npm run dev
 
 ```bash
 npm run check
-npm test
 ```
 
 ## App role routing
