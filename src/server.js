@@ -142,8 +142,8 @@ async function migrateCertificateV1() {
       ALTER TABLE registry_records
       ADD COLUMN IF NOT EXISTS certificate_version integer NOT NULL DEFAULT 1;
     `);
-  } catch (error) {
-    console.warn('[db] migration skipped, falling back to in-memory mode:', error.message);
+  } catch (_error) {
+    console.warn('[db] migration skipped, falling back to in-memory mode');
   }
 }
 
@@ -168,8 +168,8 @@ app.get('/ready', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     res.json({ ready: true, database: 'ok' });
-  } catch (error) {
-    res.status(503).json({ ready: false, database: error.message });
+  } catch (_error) {
+    res.status(503).json({ ready: false, database: 'unavailable' });
   }
 });
 
@@ -201,7 +201,7 @@ async function createRegistryRecord(req, res) {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [record.qrvid, record.title, record.subject, record.issuer, record.status, record.certificate_version]
     );
-  } catch (error) {
+  } catch (_error) {
     memoryRecords.set(qrvid, record);
   }
 
