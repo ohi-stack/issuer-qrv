@@ -74,7 +74,8 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       };
     }
 
-    const data: Record<string, unknown> = await response.json();
+    const rawJson = (await response.json()) as Record<string, unknown>;
+    const data = typeof rawJson.data === 'object' && rawJson.data ? (rawJson.data as Record<string, unknown>) : rawJson;
     const issuerLogoUrl =
       typeof data.issuerLogoUrl === 'string'
         ? data.issuerLogoUrl

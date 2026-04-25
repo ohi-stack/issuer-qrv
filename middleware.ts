@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppRole } from '@/lib/app-role';
 
 const PUBLIC_PATHS = ['/', '/login', '/healthz', '/readyz', '/version'];
-const VERIFY_BLOCKED_PATHS = ['/dashboard', '/certificates', '/api-keys', '/settings'];
+const VERIFY_BLOCKED_PATHS = ['/dashboard', '/certificates', '/api-keys', '/settings', '/login'];
 
 function isStaticPath(pathname: string): boolean {
   return pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.includes('.');
@@ -15,9 +16,18 @@ function isIssuerOnlyPath(pathname: string): boolean {
   return VERIFY_BLOCKED_PATHS.some((basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`));
 }
 
+function isVerifyPublicPath(pathname: string): boolean {
+  if (pathname === '/') return true;
+  if (pathname === '/healthz' || pathname === '/readyz' || pathname === '/version') return true;
+  if (pathname.startsWith('/api')) return true;
+
+  const segments = pathname.split('/').filter(Boolean);
+  return segments.length === 1;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const role = process.env.NEXT_PUBLIC_APP_ROLE === 'verify' ? 'verify' : 'issuer';
+  const role = getAppRole();
 
   if (isStaticPath(pathname)) {
     return NextResponse.next();
@@ -25,6 +35,9 @@ export function middleware(request: NextRequest) {
 
   if (role === 'verify') {
     if (isIssuerOnlyPath(pathname)) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    if (!isVerifyPublicPath(pathname)) {
       return NextResponse.redirect(new URL('/', request.url));
     }
     return NextResponse.next();
