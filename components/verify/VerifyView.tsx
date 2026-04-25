@@ -39,6 +39,22 @@ function Field({ label, value, mono = false }: { label: string; value: string; m
 }
 
 export function VerifyView({ record }: Props) {
+  if (record.apiUnavailable) {
+    return (
+      <main className="page-wrap">
+        <section className="verify-card service-panel">
+          <p className="eyebrow">QRV Registry Verification</p>
+          <h1>Verification service is temporarily unavailable</h1>
+          <p className="status-message">
+            We could not reach the verification API right now. Please retry in a moment.
+          </p>
+          <Field label="QRVID" value={record.qrvid} mono />
+          <Field label="Verification Timestamp" value={formatDate(record.verifiedAt)} />
+        </section>
+      </main>
+    );
+  }
+
   const status = STATUS_LABELS[record.status];
 
   return (
@@ -65,6 +81,7 @@ export function VerifyView({ record }: Props) {
         </section>
 
         <section className="fields-grid" aria-label="verification details">
+          <Field label="Record Type" value={record.recordType ?? 'Unavailable'} />
           <Field label="Credential Title" value={record.credentialTitle} />
           <Field label="Subject" value={record.subjectDisplay} />
           <Field label="Issued Date" value={formatDate(record.issuedAt)} />

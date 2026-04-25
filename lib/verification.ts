@@ -4,12 +4,14 @@ export type VerificationRecord = {
   status: VerifyStatus;
   issuerName: string;
   issuerLogoUrl?: string;
+  recordType?: string;
   credentialTitle: string;
   subjectDisplay: string;
   issuedAt: string;
   verifiedAt: string;
   proofReference: string;
   qrvid: string;
+  apiUnavailable?: boolean;
 };
 
 const VERIFY_API_BASE_URL = process.env.NEXT_PUBLIC_QRV_API_BASE_URL ?? 'https://api.qrv.network';
@@ -56,21 +58,51 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       },
     });
 
+    if (response.status === 404) {
+      return {
+        status: 'NOT_FOUND',
+        issuerName: 'Unavailable',
+        recordType: 'Unavailable',
+        credentialTitle: 'Unavailable',
+        subjectDisplay: 'Unavailable',
+        issuedAt: 'Unavailable',
+        verifiedAt,
+        proofReference: 'Unavailable',
+        qrvid,
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        status: 'NOT_FOUND',
+        issuerName: 'Unavailable',
+        recordType: 'Unavailable',
+        credentialTitle: 'Unavailable',
+        subjectDisplay: 'Unavailable',
+        issuedAt: 'Unavailable',
+        verifiedAt,
+        proofReference: 'Unavailable',
+        qrvid,
+        apiUnavailable: true,
+      };
     if (!response.ok) {
       return getUnavailableRecord(qrvid, verifiedAt);
     }
 
-    const data: Record<string, unknown> = await response.json();
-    const issuerLogoUrl = typeof data.issuerLogoUrl === 'string'
-      ? data.issuerLogoUrl
-      : typeof data.issuer_logo_url === 'string'
-        ? data.issuer_logo_url
-        : undefined;
+    const rawJson = (await response.json()) as Record<string, unknown>;
+    const data = typeof rawJson.data === 'object' && rawJson.data ? (rawJson.data as Record<string, unknown>) : rawJson;
+    const issuerLogoUrl =
+      typeof data.issuerLogoUrl === 'string'
+        ? data.issuerLogoUrl
+        : typeof data.issuer_logo_url === 'string'
+          ? data.issuer_logo_url
+          : undefined;
 
     return {
       status: normalizeStatus(data.status),
       issuerName: asText(data.issuerName ?? data.issuer),
       issuerLogoUrl,
+      recordType: asText(data.recordType ?? data.record_type ?? data.type),
       credentialTitle: asText(data.credentialTitle ?? data.title),
       subjectDisplay: asText(data.subjectDisplay ?? data.recipientName ?? data.subject),
       issuedAt: asText(data.issuedAt ?? data.issueDate ?? data.created_at),
@@ -79,6 +111,18 @@ export async function fetchVerification(qrvid: string): Promise<VerificationReco
       qrvid: asText(data.qrvid, qrvid),
     };
   } catch {
+    return {
+      status: 'NOT_FOUND',
+      issuerName: 'Unavailable',
+      recordType: 'Unavailable',
+      credentialTitle: 'Unavailable',
+      subjectDisplay: 'Unavailable',
+      issuedAt: 'Unavailable',
+      verifiedAt,
+      proofReference: 'Unavailable',
+      qrvid,
+      apiUnavailable: true,
+    };
     return getUnavailableRecord(qrvid, verifiedAt);
   }
 }
