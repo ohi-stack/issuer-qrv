@@ -93,6 +93,9 @@ function rateLimit(req, res, next) {
 
 app.use(rateLimit);
 
+const VERSION = process.env.APP_VERSION || process.env.npm_package_version || '1.0.0';
+const QRVID_FORMAT = /^[A-Z0-9][A-Z0-9-]{5,127}$/;
+
 function authByToken(expectedToken) {
   return (req, res, next) => {
     const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
@@ -181,12 +184,72 @@ async function readRecordById(qrvid) {
   }
 }
 
-app.get('/', (_req, res) => {
-  res.send('QR-V Issuer Portal Running');
-});
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderLayout({ title, body }) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: Inter, Arial, sans-serif; margin: 0; background: #0b1020; color: #e6e9f5; }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px; }
+    .card { background: #121a33; border: 1px solid #293357; border-radius: 14px; padding: 24px; }
+    h1, h2 { margin-top: 0; color: #fff; }
+    p, li { line-height: 1.5; }
+    .muted { color: #b2bddf; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type=text] { flex: 1 1 280px; padding: 12px; border-radius: 8px; border: 1px solid #40508b; background: #0f1730; color: #fff; }
+    button, .btn { padding: 12px 16px; border: 0; border-radius: 8px; background: #5b7cfa; color: #fff; text-decoration: none; cursor: pointer; font-weight: 600; }
+    .links a { color: #9ec1ff; margin-right: 16px; }
+    .status { font-weight: 700; padding: 4px 8px; border-radius: 999px; display: inline-block; }
+    .VERIFIED { background: #1e7f4f; color: #d8ffe8; }
+    .REVOKED, .EXPIRED, .NOT_FOUND, .INVALID_FORMAT, .UNAVAILABLE { background: #7f2f2f; color: #ffe3e3; }
+    code { background: #0c1227; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">${body}</div>
+</body>
+</html>`;
+}
+
+function renderPortalHome() {
+  return renderLayout({
+    title: 'QR-V™ Verification Portal',
+    body: `
+    <section class="card">
+      <h1>QR-V™ Verification Portal</h1>
+      <p class="muted">Authenticate certificates, credentials, products, and registry-backed records</p>
+      <form class="row" action="/verify" method="get" onsubmit="event.preventDefault();const v=document.getElementById('qrvid').value.trim();if(v){window.location='/' + encodeURIComponent(v);}">
+        <input id="qrvid" name="qrvid" type="text" required placeholder="Enter QRVID (for example: QRV-PROD-CERT-000001)" />
+        <button type="submit">Verify QRVID</button>
+      </form>
+      <p><a class="btn" href="/QRV-PROD-CERT-000001">Try demo: QRV-PROD-CERT-000001</a></p>
+      <div class="links">
+        <a href="/healthz">/healthz</a>
+        <a href="/version">/version</a>
+      </div>
+    </section>`
+  });
+}
 
 app.get('/healthz', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), environment: NODE_ENV });
+});
+
+app.get('/version', (_req, res) => {
+  res.json({ version: VERSION, service: 'qrv-verify', environment: NODE_ENV });
 });
 
 app.get('/health', (_req, res) => {
@@ -293,6 +356,56 @@ async function getRegistryRecord(req, res, qrvid) {
   }
 }
 
+async function getVerificationState(qrvid) {
+  if (!QRVID_FORMAT.test(qrvid)) {
+    return { state: 'INVALID_FORMAT', message: 'QRVID format is invalid' };
+  }
+
+  try {
+    const record = await readRecordById(qrvid);
+    if (!record) {
+      return { state: 'NOT_FOUND', message: 'No registry record was found for this QRVID.' };
+    }
+
+    const status = String(record.status || '').toLowerCase();
+    if (status === 'revoked') {
+      return { state: 'REVOKED', message: 'This record has been revoked by the issuer.', record };
+    }
+    if (status === 'expired') {
+      return { state: 'EXPIRED', message: 'This record has expired and is no longer valid.', record };
+    }
+
+    return { state: 'VERIFIED', message: 'This record is valid and currently active.', record };
+  } catch (_error) {
+    return { state: 'UNAVAILABLE', message: 'Verification service is temporarily unavailable.' };
+  }
+}
+
+function renderVerificationPage(qrvid, payload) {
+  const { state, message, record } = payload;
+  const metadata = record
+    ? `<ul>
+        <li><strong>Title:</strong> ${escapeHtml(record.title || 'N/A')}</li>
+        <li><strong>Subject:</strong> ${escapeHtml(record.subject || 'N/A')}</li>
+        <li><strong>Issuer:</strong> ${escapeHtml(record.issuer || 'N/A')}</li>
+      </ul>`
+    : '<p class="muted">No additional record metadata available.</p>';
+
+  return renderLayout({
+    title: `QR-V Verify • ${state} • ${qrvid}`,
+    body: `
+      <section class="card">
+        <h1>QR-V™ Verification Result</h1>
+        <p><span class="status ${state}">${state}</span></p>
+        <p>${escapeHtml(message)}</p>
+        <p><strong>QRVID:</strong> <code>${escapeHtml(qrvid)}</code></p>
+        ${metadata}
+        <p class="links"><a href="/">Back to portal</a> <a href="/verify/${encodeURIComponent(qrvid)}">Canonical verify URL</a></p>
+      </section>
+    `
+  });
+}
+
 async function revokeRegistryRecord(req, res, qrvid) {
   try {
     let recordFound = false;
@@ -352,7 +465,44 @@ app.get('/records/:id', async (req, res) => {
 });
 
 app.get('/verify/:id', async (req, res) => {
-  return getRegistryRecord(req, res, req.params.id);
+  const qrvid = req.params.id;
+  const payload = await getVerificationState(qrvid);
+  const statusCode = payload.state === 'VERIFIED' ? 200 : payload.state === 'UNAVAILABLE' ? 503 : 404;
+  return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
+});
+
+app.get('/', (_req, res) => {
+  res.type('html').send(renderPortalHome());
+});
+
+app.get('/:qrvid', async (req, res, next) => {
+  const staticRoutes = new Set(['healthz', 'readyz', 'ready', 'health', 'version', 'registry', 'records', 'verify', 'metrics']);
+  if (staticRoutes.has(req.params.qrvid)) {
+    return next();
+  }
+  if (!String(req.params.qrvid).toUpperCase().startsWith('QRV-')) {
+    return next();
+  }
+
+  const qrvid = req.params.qrvid;
+  const payload = await getVerificationState(qrvid);
+  const statusCode = payload.state === 'VERIFIED' ? 200 : payload.state === 'UNAVAILABLE' ? 503 : 404;
+  return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
+});
+
+app.use((req, res) => {
+  res.status(404).type('html').send(
+    renderLayout({
+      title: 'QR-V™ Verification Portal • Not Found',
+      body: `
+      <section class="card">
+        <h1>QR-V™ Verification Portal</h1>
+        <p><span class="status NOT_FOUND">NOT_FOUND</span></p>
+        <p>The route <code>${escapeHtml(req.path)}</code> does not exist.</p>
+        <p><a class="btn" href="/">Go to portal home</a></p>
+      </section>`
+    })
+  );
 });
 
 async function runProductionSmokeCheck() {
@@ -372,8 +522,8 @@ async function start() {
     await runProductionSmokeCheck();
   }
 
-  app.listen(PORT, () => {
-    console.log(`QR-V server running on ${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`QR-V server running on 0.0.0.0:${PORT}`);
   });
 }
 

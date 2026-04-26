@@ -13,8 +13,6 @@
     "test:watch": "vitest",
     "smoke:e2e": "node scripts/e2e-smoke.mjs",
     "smoke:external": "node scripts/external-smoke.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build",
-    "validate:prod": "node scripts/validate-prod.mjs"
     "check": "npm run lint && npm run typecheck && npm test",
     "validate:prod": "node scripts/validate-prod.mjs",
     "smoke:verify-domain": "node scripts/verify-domain-smoke.mjs"
