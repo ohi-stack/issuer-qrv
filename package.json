@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "start:server": "node server.js",
     "lint": "NODE_ENV=development next lint",
     "typecheck": "tsc --noEmit",
