@@ -3,6 +3,7 @@ const cors = require('cors');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.ADMIN_API_KEY;
 const ISSUER_TOKEN = process.env.ISSUER_TOKEN || process.env.ISSUER_API_KEY_SECRET;
@@ -11,12 +12,15 @@ const SIGNING_SECRET = process.env.SIGNING_SECRET || process.env.QRV_SIGNING_SEC
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
+const HOST_ROLE = String(process.env.HOST_ROLE || 'verify').toLowerCase();
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://issuer.qrv.network';
+const ISSUER_LOGIN_PATH = process.env.ISSUER_LOGIN_PATH || '/login';
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 100);
+const VALID_HOST_ROLES = new Set(['issuer', 'verify', 'api']);
 
 if (!process.env.ADMIN_TOKEN && process.env.ADMIN_API_KEY) {
   console.warn('[config] ADMIN_API_KEY is deprecated, prefer ADMIN_TOKEN');
@@ -38,6 +42,7 @@ function getConfigIssues() {
   if (!ISSUER_TOKEN) issues.push('ISSUER_TOKEN (or ISSUER_API_KEY_SECRET) is missing');
   if (!JWT_SECRET) issues.push('JWT_SECRET (or ISSUER_JWT_SECRET) is missing');
   if (!ADMIN_TOKEN) issues.push('ADMIN_TOKEN (or ADMIN_API_KEY) is missing');
+  if (!VALID_HOST_ROLES.has(HOST_ROLE)) issues.push('HOST_ROLE must be issuer, verify, or api');
   return issues;
 }
 
@@ -47,6 +52,7 @@ const pool = new Pool({
 });
 
 const app = express();
+app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json());
 
@@ -99,7 +105,13 @@ const QRVID_FORMAT = /^[A-Z0-9][A-Z0-9-]{5,127}$/;
 function authByToken(expectedToken) {
   return (req, res, next) => {
     const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
-    if (!token || token !== expectedToken) {
+    const tokenBuffer = Buffer.from(String(token || ''), 'utf8');
+    const expectedBuffer = Buffer.from(String(expectedToken || ''), 'utf8');
+    const valid =
+      expectedBuffer.length > 0 &&
+      expectedBuffer.length === tokenBuffer.length &&
+      crypto.timingSafeEqual(expectedBuffer, tokenBuffer);
+    if (!valid) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     return next();
@@ -184,6 +196,15 @@ async function readRecordById(qrvid) {
   }
 }
 
+function normalizeQrvid(rawValue) {
+  try {
+    const decoded = decodeURIComponent(String(rawValue || '').trim());
+    return decoded.toUpperCase().replace(/\s+/g, '');
+  } catch (_error) {
+    return '';
+  }
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -225,11 +246,32 @@ function renderLayout({ title, body }) {
 }
 
 function renderPortalHome() {
+  if (HOST_ROLE === 'api') {
+    return renderLayout({
+      title: 'QR-V™ API Surface',
+      body: `
+      <section class="card">
+        <h1>QR-V™ API Surface</h1>
+        <p class="muted">This deployment is API-only. Use issuer.qrv.network for issuer UI and verify.qrv.network for public verification.</p>
+        <div class="links">
+          <a href="/healthz">/healthz</a>
+          <a href="/readyz">/readyz</a>
+          <a href="/version">/version</a>
+          <a href="/api/v1/verify/QRV-PROD-CERT-000001">/api/v1/verify/:qrvid</a>
+        </div>
+      </section>`
+    });
+  }
+
+  if (HOST_ROLE === 'issuer') {
+    return null;
+  }
+
   return renderLayout({
-    title: 'QR-V™ Verification Portal',
+    title: 'QR-V™ Public Verification',
     body: `
     <section class="card">
-      <h1>QR-V™ Verification Portal</h1>
+      <h1>QRV Public Verification</h1>
       <p class="muted">Authenticate certificates, credentials, products, and registry-backed records</p>
       <form class="row" action="/verify" method="get" onsubmit="event.preventDefault();const v=document.getElementById('qrvid').value.trim();if(v){window.location='/' + encodeURIComponent(v);}">
         <input id="qrvid" name="qrvid" type="text" required placeholder="Enter QRVID (for example: QRV-PROD-CERT-000001)" />
@@ -381,6 +423,32 @@ async function getVerificationState(qrvid) {
   }
 }
 
+async function resolveVerification(qrvidRaw) {
+  const qrvid = normalizeQrvid(qrvidRaw);
+  const verifiedAt = new Date().toISOString();
+  const payload = await getVerificationState(qrvid);
+  const statusCodeByState = {
+    VERIFIED: 200,
+    REVOKED: 200,
+    EXPIRED: 200,
+    INVALID_FORMAT: 400,
+    NOT_FOUND: 404,
+    UNAVAILABLE: 503
+  };
+
+  return {
+    qrvid,
+    payload,
+    body: {
+      qrvid,
+      status: payload.state,
+      message: payload.message,
+      verifiedAt
+    },
+    statusCode: statusCodeByState[payload.state] || 500
+  };
+}
+
 function renderVerificationPage(qrvid, payload) {
   const { state, message, record } = payload;
   const metadata = record
@@ -465,13 +533,19 @@ app.get('/records/:id', async (req, res) => {
 });
 
 app.get('/verify/:id', async (req, res) => {
-  const qrvid = req.params.id;
-  const payload = await getVerificationState(qrvid);
-  const statusCode = payload.state === 'VERIFIED' ? 200 : payload.state === 'UNAVAILABLE' ? 503 : 404;
+  const { qrvid, payload, statusCode } = await resolveVerification(req.params.id);
   return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
 });
 
+app.get('/api/v1/verify/:qrvid', async (req, res) => {
+  const { body, statusCode } = await resolveVerification(req.params.qrvid);
+  return res.status(statusCode).json(body);
+});
+
 app.get('/', (_req, res) => {
+  if (HOST_ROLE === 'issuer') {
+    return res.redirect(302, ISSUER_LOGIN_PATH);
+  }
   res.type('html').send(renderPortalHome());
 });
 
@@ -484,9 +558,7 @@ app.get('/:qrvid', async (req, res, next) => {
     return next();
   }
 
-  const qrvid = req.params.qrvid;
-  const payload = await getVerificationState(qrvid);
-  const statusCode = payload.state === 'VERIFIED' ? 200 : payload.state === 'UNAVAILABLE' ? 503 : 404;
+  const { qrvid, payload, statusCode } = await resolveVerification(req.params.qrvid);
   return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
 });
 
@@ -516,6 +588,13 @@ async function runProductionSmokeCheck() {
 }
 
 async function start() {
+  if (IS_PRODUCTION && !DATABASE_URL) {
+    throw new Error('DATABASE_URL is required in production');
+  }
+  if (!VALID_HOST_ROLES.has(HOST_ROLE)) {
+    throw new Error(`Invalid HOST_ROLE '${HOST_ROLE}'. Allowed values: issuer, verify, api`);
+  }
+
   await migrateCertificateV1();
 
   if (process.env.RUN_SMOKE_CHECK === '1') {
@@ -523,7 +602,7 @@ async function start() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`QR-V server running on 0.0.0.0:${PORT}`);
+    console.log(`QR-V server running on 0.0.0.0:${PORT} role=${HOST_ROLE}`);
   });
 }
 
@@ -539,5 +618,7 @@ module.exports = {
   start,
   migrateCertificateV1,
   runProductionSmokeCheck,
-  getConfigIssues
+  getConfigIssues,
+  normalizeQrvid,
+  resolveVerification
 };

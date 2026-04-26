@@ -91,6 +91,7 @@ npm run dev
 
 - `PORT` (provided by Hostinger at runtime)
 - `NODE_ENV=production`
+- `HOST_ROLE=verify` for verify.qrv.network (`issuer` for issuer.qrv.network, `api` for API-only host)
 - `DATABASE_URL`
 - `SIGNING_SECRET`
 - `ISSUER_TOKEN`
@@ -106,6 +107,7 @@ npm run dev
 - `GET https://verify.qrv.network/version`
 - `GET https://verify.qrv.network/QRV-PROD-CERT-000001`
 - `GET https://verify.qrv.network/verify/QRV-PROD-CERT-000001`
+- `GET https://verify.qrv.network/api/v1/verify/QRV-PROD-CERT-000001`
 - `GET https://verify.qrv.network/this-route-should-404`
 
 ### Post-merge release flow
@@ -143,5 +145,12 @@ This Next.js app supports two deployment roles via `NEXT_PUBLIC_APP_ROLE`:
 Verification records are fetched from:
 
 - `${NEXT_PUBLIC_QRV_API_BASE_URL}/api/v1/verify/{qrvid}`
+
+## Production host mapping
+
+- `issuer.qrv.network` → Issuer control plane (`/` redirects to `/login`)
+- `verify.qrv.network` → Public verification portal (`/` is branded public verify landing)
+- `api.qrv.network` → API endpoints / JSON services
+- `registry.qrv.network` → Registry service
 
 See `docs/verify-domain-deployment.md` for host/domain rollout steps.
