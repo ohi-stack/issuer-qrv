@@ -78,6 +78,35 @@ npm install
 npm run dev
 ```
 
+## Hostinger deployment (verify.qrv.network)
+
+- **Runtime:** Node.js `22.x` (matches `engines.node` in `package.json`)
+- **Install command:** `npm ci`
+- **Build command:** `npm run build`
+- **Start command:** `npm run start:server`
+- **Bind host/port:** app listens on `0.0.0.0` and `process.env.PORT` (Hostinger-compatible)
+
+### Required environment variables
+
+- `PORT` (provided by Hostinger at runtime)
+- `NODE_ENV=production`
+- `DATABASE_URL`
+- `SIGNING_SECRET`
+- `ISSUER_TOKEN`
+- `JWT_SECRET`
+- `ADMIN_TOKEN`
+- Optional: `APP_VERSION` (shown by `/version`)
+
+### Smoke test URLs
+
+- `GET https://verify.qrv.network/`
+- `GET https://verify.qrv.network/healthz`
+- `GET https://verify.qrv.network/readyz`
+- `GET https://verify.qrv.network/version`
+- `GET https://verify.qrv.network/QRV-PROD-CERT-000001`
+- `GET https://verify.qrv.network/verify/QRV-PROD-CERT-000001`
+- `GET https://verify.qrv.network/this-route-should-404`
+
 ## Smoke commands
 
 - `npm run smoke:e2e` (API + verify flow)
