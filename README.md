@@ -85,6 +85,7 @@ npm run dev
 - **Build command:** `npm run build`
 - **Start command:** `npm run start:server`
 - **Bind host/port:** app listens on `0.0.0.0` and `process.env.PORT` (Hostinger-compatible)
+- **Production branch:** deploy from `main` after merge
 
 ### Required environment variables
 
@@ -106,6 +107,20 @@ npm run dev
 - `GET https://verify.qrv.network/QRV-PROD-CERT-000001`
 - `GET https://verify.qrv.network/verify/QRV-PROD-CERT-000001`
 - `GET https://verify.qrv.network/this-route-should-404`
+
+### Post-merge release flow
+
+1. Merge PR into `main`.
+2. Redeploy `main` on Hostinger.
+3. Run the smoke URLs above.
+4. Tag release (example):
+
+```bash
+git checkout main
+git pull
+git tag v1.0.0-verification-portal
+git push origin v1.0.0-verification-portal
+```
 
 ## Smoke commands
 

@@ -1,64 +1,69 @@
 # verify.qrv.network deployment guide
 
-This guide configures the same `issuer-qrv` Next.js app to run as the **public verify frontend** on `verify.qrv.network`.
+This guide documents the **canonical production setup** now that the branded verification portal is merged to `main`.
 
-## 1) Hostinger settings
+## 1) Deploy source of truth
 
-In Hostinger (or your Node host), configure `verify.qrv.network` to deploy this repo and run the Next.js app:
+- Deploy **branch `main`** for `verify.qrv.network`.
+- The public verify portal is served by the Node/Express service (`npm run start:server`).
+- Do not deploy stale feature branches for production verify traffic.
 
+## 2) Hostinger settings (production)
+
+Use the following project settings:
+
+- Install command: `npm ci`
 - Build command: `npm run build`
-- Start command: `npm run start`
-- Node runtime: 20+
-- Do **not** point verify traffic at the legacy Express fallback server (`npm run start:server`), because that process responds with plain text and does not serve the Next frontend routes.
+- Start command: `npm run start:server`
+- Node runtime: `22.x`
+- App binds to `0.0.0.0:${PORT}` (Hostinger compatible).
 
-## 2) Required environment variables
-
-Set these for the **verify** deployment:
+## 3) Required environment variables
 
 ```bash
-NEXT_PUBLIC_APP_ROLE=verify
-NEXT_PUBLIC_QRV_API_BASE_URL=https://api.qrv.network
+NODE_ENV=production
+DATABASE_URL=...
+SIGNING_SECRET=...
+ISSUER_TOKEN=...
+JWT_SECRET=...
+ADMIN_TOKEN=...
 ```
 
-Set these for the **issuer** deployment:
+Optional:
 
 ```bash
-NEXT_PUBLIC_APP_ROLE=issuer
-NEXT_PUBLIC_QRV_API_BASE_URL=https://api.qrv.network
+APP_VERSION=v1.0.0-verification-portal
 ```
 
-Notes:
+## 4) Post-deploy smoke tests
 
-- The verify UI resolves records through `GET ${NEXT_PUBLIC_QRV_API_BASE_URL}/api/v1/verify/{qrvid}`.
-- If `NEXT_PUBLIC_APP_ROLE` is missing/invalid, the app defaults to `issuer` behavior.
+Validate these exact URLs after every redeploy:
 
-## 3) Expected routes by role
+1. `https://verify.qrv.network/`
+2. `https://verify.qrv.network/healthz`
+3. `https://verify.qrv.network/version`
+4. `https://verify.qrv.network/QRV-PROD-CERT-000001`
+5. `https://verify.qrv.network/verify/QRV-PROD-CERT-000001`
+6. `https://verify.qrv.network/random-bad-route`
 
-### verify role (`NEXT_PUBLIC_APP_ROLE=verify`)
+Expected outcomes:
 
-- `/` renders **QRV Public Verification** landing page.
-- `/QRV-PROD-CERT-000001` renders verification details from API.
-- `/{unknown-qrvid}` renders NOT_FOUND state in verification UI.
+- `/` contains `QR-V™ Verification Portal`.
+- `/healthz` and `/version` return JSON.
+- QRVID paths return branded HTML result pages (not plain `Not found` text).
+- Unknown routes return branded 404 HTML.
 
-### issuer role (`NEXT_PUBLIC_APP_ROLE=issuer`)
+## 5) Release operations after merge
 
-- `/` redirects to `/login`.
-- `/{qrvid}` public verify page is not served.
+After a production-ready PR merges to `main`:
 
-## 4) Smoke tests
-
-Run post-deploy smoke checks:
+1. Redeploy `main` on Hostinger.
+2. Run smoke tests from section 4.
+3. Tag release:
 
 ```bash
-VERIFY_BASE_URL=https://verify.qrv.network \
-SEEDED_QRVID=QRV-PROD-CERT-000001 \
-npm run smoke:verify-domain
+git checkout main
+git pull
+git tag v1.0.0-verification-portal
+git push origin v1.0.0-verification-portal
 ```
-
-The smoke script validates:
-
-1. verify root (`/`) returns HTML and includes `QRV Public Verification`.
-2. seeded QRVID page returns HTML and includes `VERIFIED` UI text.
-3. unknown QRVID page returns HTML and includes `NOT_FOUND` UI text.
-
-If any check returns plain `Not found` text or a non-HTML response, the deployment is still misrouted.
