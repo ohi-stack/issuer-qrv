@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const QRCode = require('qrcode');
-const { v4: uuidv4 } = require('uuid');
 const { Pool } = require('pg');
 const crypto = require('crypto');
 
@@ -91,16 +90,24 @@ function rateLimit(req, res, next) {
   rateLimitStore.set(clientId, existing);
 
   if (existing.count > RATE_LIMIT_MAX) {
-    return res.status(429).json({ error: 'Rate limit exceeded' });
+    return sendError(res, 429, 'RATE_LIMITED', 'Rate limit exceeded');
   }
 
   return next();
 }
 
-app.use(rateLimit);
-
 const VERSION = process.env.APP_VERSION || process.env.npm_package_version || '1.0.0';
 const QRVID_FORMAT = /^[A-Z0-9][A-Z0-9-]{5,127}$/;
+
+function sendError(res, status, code, message, extra = {}) {
+  return res.status(status).json({
+    error: {
+      code,
+      message,
+      ...extra
+    }
+  });
+}
 
 function authByToken(expectedToken) {
   return (req, res, next) => {
@@ -120,6 +127,50 @@ function authByToken(expectedToken) {
 
 const adminAuth = authByToken(ADMIN_TOKEN);
 const issuerAuth = authByToken(ISSUER_TOKEN);
+
+function decodeBase64Url(input) {
+  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
+  return Buffer.from(normalized + pad, 'base64').toString('utf8');
+}
+
+function base64UrlEncode(input) {
+  return Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function isValidIssuerJwt(token) {
+  try {
+    if (!JWT_SECRET || !token || !token.includes('.')) return false;
+    const [headerB64, payloadB64, signatureB64] = token.split('.');
+    if (!headerB64 || !payloadB64 || !signatureB64) return false;
+    const header = JSON.parse(decodeBase64Url(headerB64));
+    if (header.alg !== 'HS256') return false;
+    const signingInput = `${headerB64}.${payloadB64}`;
+    const expectedSig = base64UrlEncode(crypto.createHmac('sha256', JWT_SECRET).update(signingInput).digest());
+    const expectedBuffer = Buffer.from(expectedSig, 'utf8');
+    const providedBuffer = Buffer.from(signatureB64, 'utf8');
+    if (expectedBuffer.length !== providedBuffer.length) return false;
+    if (!crypto.timingSafeEqual(expectedBuffer, providedBuffer)) return false;
+    const payload = JSON.parse(decodeBase64Url(payloadB64));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && Number(payload.exp) < now) return false;
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function issuerTokenOrJwtAuth(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+  const apiKey = req.headers['x-api-key']?.toString().trim();
+  const bearerMatchesIssuerToken = token && ISSUER_TOKEN && token === ISSUER_TOKEN;
+  const apiKeyMatchesIssuerToken = apiKey && ISSUER_TOKEN && apiKey === ISSUER_TOKEN;
+  const bearerIsJwt = isValidIssuerJwt(token);
+  if (bearerMatchesIssuerToken || apiKeyMatchesIssuerToken || bearerIsJwt) {
+    return next();
+  }
+  return sendError(res, 401, 'UNAUTHORIZED', 'Issuer authentication required');
+}
 
 function assertNoProdMemoryFallback() {
   if (IS_PRODUCTION) {
@@ -149,8 +200,12 @@ async function auditLog(eventType, details) {
 async function migrateCertificateV1() {
   try {
     await pool.query(`
+      CREATE SEQUENCE IF NOT EXISTS registry_qrvid_seq START WITH 1 INCREMENT BY 1;
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS registry_records (
-        qrvid uuid PRIMARY KEY,
+        qrvid text PRIMARY KEY,
         title text NOT NULL,
         subject text NOT NULL,
         issuer text NOT NULL,
@@ -174,11 +229,35 @@ async function migrateCertificateV1() {
       ALTER TABLE registry_records
       ADD COLUMN IF NOT EXISTS certificate_version integer NOT NULL DEFAULT 1;
     `);
+
+    await pool.query(
+      `INSERT INTO registry_records(qrvid, title, subject, issuer, status, certificate_version)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (qrvid) DO NOTHING`,
+      [
+        'QRV-PROD-CERT-000001',
+        'QR-V Production Seed Certificate',
+        'QR-V Production Test Subject',
+        'QR-V Production Issuer',
+        'active',
+        1
+      ]
+    );
   } catch (error) {
     if (IS_PRODUCTION) {
       throw new Error(`[db] migration failed in production: ${error.message}`);
     }
     console.warn('[db] migration skipped, falling back to in-memory mode');
+    memoryRecords.set('QRV-PROD-CERT-000001', {
+      qrvid: 'QRV-PROD-CERT-000001',
+      title: 'QR-V Production Seed Certificate',
+      subject: 'QR-V Production Test Subject',
+      issuer: 'QR-V Production Issuer',
+      status: 'active',
+      certificate_version: 1,
+      created_at: new Date().toISOString(),
+      revoked_at: null
+    });
   }
 }
 
@@ -346,7 +425,17 @@ app.get('/metrics', adminAuth, (_req, res) => {
 });
 
 async function createRegistryRecord(req, res) {
-  const qrvid = uuidv4();
+  let qrvid = `QRV-PROD-CERT-${String(Date.now()).slice(-6)}`;
+  try {
+    const sequenceResult = await pool.query(`SELECT nextval('registry_qrvid_seq') AS seq`);
+    const seq = Number(sequenceResult.rows[0]?.seq || 1);
+    qrvid = `QRV-PROD-CERT-${String(seq).padStart(6, '0')}`;
+  } catch (_error) {
+    if (IS_PRODUCTION) {
+      return sendError(res, 503, 'DB_UNAVAILABLE', 'Database unavailable for QRVID generation');
+    }
+  }
+
   const record = {
     qrvid,
     title: req.body.title || 'Untitled Record',
@@ -366,7 +455,7 @@ async function createRegistryRecord(req, res) {
     );
   } catch (error) {
     if (IS_PRODUCTION) {
-      return res.status(503).json({ error: `Database unavailable for create: ${error.message}` });
+      return sendError(res, 503, 'DB_UNAVAILABLE', 'Database unavailable for create');
     }
     memoryRecords.set(qrvid, record);
   }
@@ -379,10 +468,14 @@ async function createRegistryRecord(req, res) {
 }
 
 async function getRegistryRecord(req, res, qrvid) {
+  if (!QRVID_FORMAT.test(qrvid)) {
+    return sendError(res, 400, 'INVALID_FORMAT', 'QRVID format is invalid');
+  }
+
   try {
     const record = await readRecordById(qrvid);
     if (!record) {
-      return res.status(404).json({ status: 'invalid', message: 'Record not found' });
+      return sendError(res, 404, 'NOT_FOUND', 'Record not found');
     }
 
     return res.json({
@@ -394,7 +487,7 @@ async function getRegistryRecord(req, res, qrvid) {
       certificateVersion: record.certificate_version || 1
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'Unable to fetch record');
   }
 }
 
@@ -475,6 +568,10 @@ function renderVerificationPage(qrvid, payload) {
 }
 
 async function revokeRegistryRecord(req, res, qrvid) {
+  if (!QRVID_FORMAT.test(qrvid)) {
+    return sendError(res, 400, 'INVALID_FORMAT', 'QRVID format is invalid');
+  }
+
   try {
     let recordFound = false;
     try {
@@ -488,7 +585,7 @@ async function revokeRegistryRecord(req, res, qrvid) {
       recordFound = Boolean(updateResult.rows[0]);
     } catch (_error) {
       if (IS_PRODUCTION) {
-        return res.status(503).json({ error: 'Database unavailable for revoke' });
+        return sendError(res, 503, 'DB_UNAVAILABLE', 'Database unavailable for revoke');
       }
     }
 
@@ -499,7 +596,7 @@ async function revokeRegistryRecord(req, res, qrvid) {
 
       const memoryRecord = memoryRecords.get(qrvid);
       if (!memoryRecord) {
-        return res.status(404).json({ error: 'Record not found' });
+        return sendError(res, 404, 'NOT_FOUND', 'Record not found');
       }
       memoryRecord.status = 'revoked';
       memoryRecord.revoked_at = new Date().toISOString();
@@ -509,17 +606,18 @@ async function revokeRegistryRecord(req, res, qrvid) {
     await auditLog('registry_revoke', { qrvid });
     return res.json({ success: true, qrvid, status: 'revoked' });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'Unable to revoke record');
   }
 }
 
 app.post('/registry/create', issuerAuth, createRegistryRecord);
+app.post('/api/v1/registry/create', issuerTokenOrJwtAuth, createRegistryRecord);
 
 app.get('/registry/:qrvid', async (req, res) => {
   return getRegistryRecord(req, res, req.params.qrvid);
 });
 
-app.post('/registry/:qrvid/revoke', adminAuth, async (req, res) => {
+app.post('/registry/:qrvid/revoke', issuerTokenOrJwtAuth, async (req, res) => {
   return revokeRegistryRecord(req, res, req.params.qrvid);
 });
 
@@ -532,14 +630,27 @@ app.get('/records/:id', async (req, res) => {
   return getRegistryRecord(req, res, req.params.id);
 });
 
-app.get('/verify/:id', async (req, res) => {
+app.get('/verify/:id', rateLimit, async (req, res) => {
   const { qrvid, payload, statusCode } = await resolveVerification(req.params.id);
   return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
 });
 
-app.get('/api/v1/verify/:qrvid', async (req, res) => {
+app.get('/api/v1/verify/:qrvid', rateLimit, async (req, res) => {
   const { body, statusCode } = await resolveVerification(req.params.qrvid);
   return res.status(statusCode).json(body);
+});
+
+app.get('/v/:qrvid', rateLimit, async (req, res) => {
+  const { qrvid, payload, statusCode } = await resolveVerification(req.params.qrvid);
+  return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
+});
+
+app.post('/api/v1/revoke', issuerTokenOrJwtAuth, async (req, res) => {
+  const qrvid = normalizeQrvid(req.body?.qrvid || '');
+  if (!qrvid) {
+    return sendError(res, 400, 'INVALID_FORMAT', 'qrvid is required');
+  }
+  return revokeRegistryRecord(req, res, qrvid);
 });
 
 app.get('/', (_req, res) => {
@@ -549,7 +660,7 @@ app.get('/', (_req, res) => {
   res.type('html').send(renderPortalHome());
 });
 
-app.get('/:qrvid', async (req, res, next) => {
+app.get('/:qrvid', rateLimit, async (req, res, next) => {
   const staticRoutes = new Set(['healthz', 'readyz', 'ready', 'health', 'version', 'registry', 'records', 'verify', 'metrics']);
   if (staticRoutes.has(req.params.qrvid)) {
     return next();
@@ -560,6 +671,13 @@ app.get('/:qrvid', async (req, res, next) => {
 
   const { qrvid, payload, statusCode } = await resolveVerification(req.params.qrvid);
   return res.status(statusCode).type('html').send(renderVerificationPage(qrvid, payload));
+});
+
+app.use((error, _req, res, _next) => {
+  if (!IS_PRODUCTION) {
+    return sendError(res, 500, 'INTERNAL_ERROR', error.message || 'Unhandled server error');
+  }
+  return sendError(res, 500, 'INTERNAL_ERROR', 'Unhandled server error');
 });
 
 app.use((req, res) => {
