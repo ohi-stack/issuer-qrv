@@ -17,7 +17,8 @@
     "validate:prod": "node scripts/validate-prod.mjs",
     "smoke:verify-domain": "node scripts/verify-domain-smoke.mjs",
     "acceptance:live": "node scripts/live-acceptance-prod.mjs",
-    "audit:repo-family": "node scripts/audit-repo-family.mjs"
+    "audit:repo-family": "node scripts/audit-repo-family.mjs",
+    "sync:production-contract": "node scripts/sync-production-contract.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
