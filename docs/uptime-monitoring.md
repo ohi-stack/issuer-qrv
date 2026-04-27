@@ -1,18 +1,29 @@
 # QRV Uptime Monitoring Setup
 
-## Monitors to configure
-1. `https://issuer.qrv.network/dashboard` (issuer portal availability)
-2. `https://issuer.qrv.network/onboarding` (onboarding path)
-3. `https://issuer.qrv.network/production-checklist` (go-live checklist)
-4. `https://verify.qrv.network/verify/QRV-PROD-CERT-000001` (expected status: VERIFIED)
-5. `https://verify.qrv.network/verify/QRV-PROD-CERT-000002` (expected status: REVOKED)
+## Runtime endpoint
+
+- Internal monitor endpoint: `GET /api/v1/uptime`
+- Checks these production services:
+  - `verify`: `https://verify.qrv.network/healthz`
+  - `registry`: `https://registry.qrv.network/healthz`
+  - `api`: `https://api.qrv.network/healthz`
+  - `issuer`: `https://issuer.qrv.network/healthz`
+
+## Monitors to configure externally
+
+1. `https://verify.qrv.network/healthz`
+2. `https://registry.qrv.network/healthz`
+3. `https://api.qrv.network/healthz`
+4. `https://issuer.qrv.network/healthz`
+5. `https://qrv.network/demo` (public flow smoke monitor)
 
 ## Recommended settings
-- Interval: 60 seconds for verify host, 120 seconds for issuer portal.
-- Alert threshold: 2 consecutive failures.
-- Escalation: pager + Slack #qrv-launch-war-room.
-- Timeouts: 8 seconds max.
 
-## SLA target this week
-- 99.9% uptime during pilot onboarding window.
-- Mean time to acknowledge incidents: < 5 minutes.
+- Interval: 60 seconds.
+- Alert threshold: 2 consecutive failures.
+- Escalation: pager + Slack `#qrv-launch-war-room`.
+- Timeout: 8 seconds.
+
+## Demo verification check
+
+- `https://verify.qrv.network/verify/QRV-DEMO-0001` should return a `VERIFIED` result.
