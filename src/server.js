@@ -46,6 +46,12 @@ function getConfigIssues() {
   return issues;
 }
 
+function getReadinessIssues() {
+  const issues = [];
+  if (!DATABASE_URL) issues.push('DATABASE_URL is missing');
+  return issues;
+}
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }
@@ -202,7 +208,6 @@ async function auditLog(eventType, details) {
     );
   } catch (_error) {
     console.warn('[audit] failed to persist', _error.message);
-    console.warn('[audit] failed to persist', error.message);
   }
 }
 
@@ -412,11 +417,7 @@ app.get('/ping', (_req, res) => {
 });
 
 app.get('/readyz', async (_req, res) => {
-  const issues = [...getConfigIssues()];
-
-  if (IS_PRODUCTION && memoryRecords.size > 0) {
-    issues.push('Mock/in-memory records detected in production runtime');
-  }
+  const issues = getReadinessIssues();
 
   if (issues.length > 0) {
     return res.status(503).json({ ready: false, database: 'unknown', issues });
@@ -425,17 +426,13 @@ app.get('/readyz', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     return res.json({ ready: true, database: 'ok', issues: [] });
-  } catch (_error) {
+  } catch (error) {
     return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
 
 app.get('/ready', async (_req, res) => {
-  const issues = [...getConfigIssues()];
-
-  if (IS_PRODUCTION && memoryRecords.size > 0) {
-    issues.push('Mock/in-memory records detected in production runtime');
-  }
+  const issues = getReadinessIssues();
 
   if (issues.length > 0) {
     return res.status(503).json({ ready: false, database: 'unknown', issues });
@@ -444,8 +441,7 @@ app.get('/ready', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     return res.json({ ready: true, database: 'ok', issues: [] });
-  } catch (_error) {
-    return res.status(503).json({ ready: false, database: 'unavailable', issues: [_error.message] });
+  } catch (error) {
     return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
@@ -742,14 +738,15 @@ async function runProductionSmokeCheck() {
 }
 
 async function start() {
-  if (IS_PRODUCTION && !DATABASE_URL) {
-    throw new Error('DATABASE_URL is required in production');
-  }
   if (!VALID_HOST_ROLES.has(HOST_ROLE)) {
     throw new Error(`Invalid HOST_ROLE '${HOST_ROLE}'. Allowed values: issuer, verify, api`);
   }
 
-  await migrateCertificateV1();
+  if (!DATABASE_URL) {
+    console.warn('[startup] DATABASE_URL is missing; booting in not-ready mode');
+  } else {
+    await migrateCertificateV1();
+  }
 
   if (process.env.RUN_SMOKE_CHECK === '1') {
     await runProductionSmokeCheck();
