@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { toVerifyUrl } from '@/lib/runtime-config';
 import { useState } from 'react';
 import { RevokeCertificateForm } from '@/components/certificates/RevokeCertificateForm';
 import { RevocationConfirmModal } from '@/components/certificates/RevocationConfirmModal';
@@ -46,7 +47,7 @@ export default function Revocations(){
       <p>Latest action status: <CertificateStatusBadge status='REVOKED' /></p>
       <p>revokedAt: {result.revokedAt || new Date().toISOString()}</p>
       <p>revocationReason: {result.revocationReason || reason}</p>
-      <Link className='btn' href={`https://verify.qrv.network/${result.qrvid}`} target='_blank'>Open Public Verification</Link>
+      <Link className='btn' href={toVerifyUrl(result.qrvid)} target='_blank'>Open Public Verification</Link>
     </>}
   </>;
 }

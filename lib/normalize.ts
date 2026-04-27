@@ -1,4 +1,5 @@
 import { AnalyticsSummary, ApiKeyRecord, AuditEvent, CertificateRecord, Issuer, PrivacyLevel, VerificationStatus } from '@/types/models';
+import { toVerifyUrl } from '@/lib/runtime-config';
 
 const allowedStatus: VerificationStatus[] = ['VERIFIED', 'REVOKED', 'EXPIRED', 'NOT_FOUND', 'DRAFT', 'PENDING_SIGNATURE'];
 const allowedPrivacy: PrivacyLevel[] = ['PUBLIC', 'RESTRICTED', 'PRIVATE'];
@@ -25,7 +26,7 @@ export function normalizeCertificateRecord(raw: Record<string, unknown>): Certif
     expirationDate: typeof raw.expirationDate === 'string' ? raw.expirationDate : null,
     privacyLevel: allowedPrivacy.includes(raw.privacyLevel as PrivacyLevel) ? (raw.privacyLevel as PrivacyLevel) : 'PUBLIC',
     status: allowedStatus.includes(statusRaw) ? statusRaw : 'NOT_FOUND',
-    verificationUrl: `https://verify.qrv.network/${qrvid}`,
+    verificationUrl: toVerifyUrl(qrvid),
     hash: str(raw.hash),
     signature: typeof raw.signature === 'string' ? raw.signature : undefined,
     verificationCount: num(raw.verificationCount),

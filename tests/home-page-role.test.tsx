@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 
-const redirectMock = vi.fn(() => {
+const redirectMock = vi.fn((..._args: unknown[]) => {
   throw new Error('NEXT_REDIRECT');
 });
 

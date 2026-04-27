@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const qrvid = `QRV-${Date.now()}`;
+  const serial = String(Date.now() % 1_000_000).padStart(6, '0');
+  const qrvid = `QRV-PROD-CERT-${serial}`;
 
   const record = {
     qrvid,
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     qrvid,
     id: qrvid,
     hash,
-    verifyUrl: `https://verify.qrv.network/${qrvid}`,
+    verifyUrl: `${process.env.NEXT_PUBLIC_QRV_VERIFY_BASE_URL || 'https://verify.qrv.network'}/${qrvid}`,
     record: {
       ...record,
       hash,

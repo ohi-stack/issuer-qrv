@@ -5,6 +5,7 @@ import { CertificateDetail } from '@/components/certificates/CertificateDetail';
 import { QRDownloadPanel } from '@/components/certificates/QRDownloadPanel';
 import { EmptyState, ErrorState, LoadingState } from '@/components/shared/ui';
 import { api } from '@/lib/api';
+import { toVerifyUrl } from '@/lib/runtime-config';
 import { useApiQuery } from '@/lib/use-api-query';
 
 export default function CertDetail(){
@@ -16,7 +17,7 @@ export default function CertDetail(){
   if (query.error) return <ErrorState message={`API unavailable: ${query.error}`} onRetry={query.retry} />;
   if (!query.data) return <EmptyState title='Certificate not found' />;
 
-  const verificationUrl = `https://verify.qrv.network/${query.data.qrvid}`;
+  const verificationUrl = toVerifyUrl(query.data.qrvid);
   return <>
     <CertificateDetail record={query.data} />
     <QRDownloadPanel qrvid={query.data.qrvid} />
