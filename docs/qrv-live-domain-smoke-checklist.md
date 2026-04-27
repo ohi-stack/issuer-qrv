@@ -27,7 +27,7 @@ Set the following before running production validation:
 
 - `issuer.qrv.network` resolves to issuer portal deployment.
 - `api.qrv.network` resolves to API deployment with `/healthz`, `/readyz`, `/certificates`, and revocation routes.
-- `verify.qrv.network` resolves to the public verification UI and supports path-based lookup (`/{qrvid}`).
+- `verify.qrv.network` resolves to the public verification UI with canonical lookup at `/verify/{qrvid}` and legacy compatibility at `/{qrvid}`.
 - TLS is enabled for all three domains.
 
 ## Migration-first requirement
@@ -54,7 +54,21 @@ npm run smoke:e2e
 - Revocation succeeds.
 - Verification resolves to `REVOKED` after revocation.
 - Missing QRVID resolves to `NOT_FOUND`.
-- Seeded record `QRV-PROD-CERT-000001` resolves at `https://verify.qrv.network/QRV-PROD-CERT-000001` with public status `VERIFIED`.
+- Invalid QRVID format renders `INVALID_FORMAT` (public-safe error state).
+- Upstream/API interruption renders `UNAVAILABLE` (public-safe error state).
+- Seeded record `QRV-PROD-CERT-000001` resolves at `https://verify.qrv.network/verify/QRV-PROD-CERT-000001` with public status `VERIFIED`.
+- Legacy path `https://verify.qrv.network/QRV-PROD-CERT-000001` redirects to canonical `/verify/QRV-PROD-CERT-000001`.
+
+## Public smoke URLs
+
+Run at least one manual browser pass against:
+
+- `https://verify.qrv.network`
+- `https://verify.qrv.network/scan`
+- `https://verify.qrv.network/help`
+- `https://verify.qrv.network/api-status`
+- `https://verify.qrv.network/verify/QRV-TEST-001`
+- `https://verify.qrv.network/QRV-TEST-001`
 
 ## Rollback criteria
 
