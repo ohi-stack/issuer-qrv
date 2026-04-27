@@ -192,7 +192,7 @@ async function auditLog(eventType, details) {
        VALUES ($1, $2::jsonb)`,
       [eventType, JSON.stringify(details)]
     );
-  } catch (error) {
+  } catch (_error) {
     console.warn('[audit] failed to persist', error.message);
   }
 }
@@ -243,7 +243,7 @@ async function migrateCertificateV1() {
         1
       ]
     );
-  } catch (error) {
+  } catch (_error) {
     if (IS_PRODUCTION) {
       throw new Error(`[db] migration failed in production: ${error.message}`);
     }
@@ -267,7 +267,7 @@ async function readRecordById(qrvid) {
     if (result.rows[0]) return result.rows[0];
     if (IS_PRODUCTION) return null;
     return memoryRecords.get(qrvid);
-  } catch (error) {
+  } catch (_error) {
     if (IS_PRODUCTION) {
       throw new Error(`[db] read failed in production: ${error.message}`);
     }
@@ -391,7 +391,7 @@ app.get('/readyz', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     return res.json({ ready: true, database: 'ok', issues: [] });
-  } catch (error) {
+  } catch (_error) {
     return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
@@ -410,7 +410,7 @@ app.get('/ready', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     return res.json({ ready: true, database: 'ok', issues: [] });
-  } catch (error) {
+  } catch (_error) {
     return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
@@ -453,7 +453,7 @@ async function createRegistryRecord(req, res) {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [record.qrvid, record.title, record.subject, record.issuer, record.status, record.certificate_version]
     );
-  } catch (error) {
+  } catch (_error) {
     if (IS_PRODUCTION) {
       return sendError(res, 503, 'DB_UNAVAILABLE', 'Database unavailable for create');
     }
@@ -486,7 +486,7 @@ async function getRegistryRecord(req, res, qrvid) {
       issuer: record.issuer,
       certificateVersion: record.certificate_version || 1
     });
-  } catch (error) {
+  } catch (_error) {
     return sendError(res, 500, 'INTERNAL_ERROR', 'Unable to fetch record');
   }
 }
@@ -605,7 +605,7 @@ async function revokeRegistryRecord(req, res, qrvid) {
 
     await auditLog('registry_revoke', { qrvid });
     return res.json({ success: true, qrvid, status: 'revoked' });
-  } catch (error) {
+  } catch (_error) {
     return sendError(res, 500, 'INTERNAL_ERROR', 'Unable to revoke record');
   }
 }

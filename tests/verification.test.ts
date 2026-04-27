@@ -6,21 +6,21 @@ describe('fetchVerification', () => {
     vi.unstubAllGlobals();
   });
 
-  it('normalizes unsupported statuses to NOT_FOUND', async () => {
+  it('normalizes unsupported statuses to UNAVAILABLE', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ status: 'ERROR', qrvid: 'QRV-1' })
-      })
+        json: async () => ({ status: 'ERROR', qrvid: 'QRV-1' }),
+      }),
     );
 
     const result = await fetchVerification('QRV-1');
-    expect(result.status).toBe('NOT_FOUND');
+    expect(result.status).toBe('UNAVAILABLE');
   });
 
-  it('maps issuer/title/subject and proof fields from API response', async () => {
+  it('maps public fields from API response', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -29,20 +29,20 @@ describe('fetchVerification', () => {
         json: async () => ({
           status: 'VERIFIED',
           issuer: 'QRV Academy',
-          title: 'Pilot Credential',
-          recipientName: 'Recipient Hidden',
-          issueDate: '2026-04-25T00:00:00.000Z',
-          proof_reference: 'abc123',
-          qrvid: 'QRV-2'
-        })
-      })
+          recordType: 'Certificate',
+          subject: 'Recipient Hidden',
+          issuedAt: '2026-04-25T00:00:00.000Z',
+          hash: 'abc123',
+          qrvid: 'QRV-2',
+        }),
+      }),
     );
 
     const result = await fetchVerification('QRV-2');
     expect(result.status).toBe('VERIFIED');
-    expect(result.issuerName).toBe('QRV Academy');
-    expect(result.credentialTitle).toBe('Pilot Credential');
-    expect(result.subjectDisplay).toBe('Recipient Hidden');
-    expect(result.proofReference).toBe('abc123');
+    expect(result.issuer).toBe('QRV Academy');
+    expect(result.recordType).toBe('Certificate');
+    expect(result.subject).toBe('Recipient Hidden');
+    expect(result.hash).toBe('abc123');
   });
 });

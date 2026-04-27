@@ -1,12 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 
-const redirectMock = vi.fn(() => {
+const redirectMock = vi.fn((url: string) => {
   throw new Error('NEXT_REDIRECT');
 });
 
 vi.mock('next/navigation', () => ({
-  redirect: (...args: unknown[]) => redirectMock(...args),
+  redirect: (url: string) => redirectMock(url),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock('next/link', () => ({
@@ -38,7 +39,7 @@ describe('home page role routing', () => {
 
     render(HomePage());
 
-    expect(screen.getByText('QRV Public Verification')).toBeInTheDocument();
+    expect(screen.getByText('Verify Any QR-V™ Record Instantly')).toBeInTheDocument();
     expect(redirectMock).not.toHaveBeenCalled();
   });
 });
