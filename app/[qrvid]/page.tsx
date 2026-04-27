@@ -1,34 +1,8 @@
-import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import { VerifyView } from '@/components/verify/VerifyView';
-import { isIssuerRole } from '@/lib/app-role';
-import { fetchVerification } from '@/lib/verification';
+import { redirect } from 'next/navigation';
 
 type Params = { qrvid: string };
 
-export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
+export default async function LegacyQrvidRoute({ params }: { params: Promise<Params> }) {
   const { qrvid } = await params;
-
-  return {
-    title: `Verification ${qrvid}`,
-    description: `Verification details for QRVID ${qrvid} from QRV registry.`,
-    alternates: {
-      canonical: `/${encodeURIComponent(qrvid)}`,
-    },
-  };
-}
-
-export default async function VerifyRoute({ params }: { params: Promise<Params> }) {
-  if (isIssuerRole()) {
-    notFound();
-  }
-
-  const { qrvid } = await params;
-
-  if (!qrvid?.trim()) {
-    notFound();
-  }
-
-  const record = await fetchVerification(qrvid);
-  return <VerifyView record={record} />;
+  redirect(`/verify/${encodeURIComponent(qrvid)}`);
 }

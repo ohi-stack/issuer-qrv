@@ -202,6 +202,7 @@ async function auditLog(eventType, details) {
     );
   } catch (_error) {
     console.warn('[audit] failed to persist', _error.message);
+    console.warn('[audit] failed to persist', error.message);
   }
 }
 
@@ -252,6 +253,19 @@ async function migrateCertificateV1() {
         seed
       );
     }
+    await pool.query(
+      `INSERT INTO registry_records(qrvid, title, subject, issuer, status, certificate_version)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (qrvid) DO NOTHING`,
+      [
+        'QRV-PROD-CERT-000001',
+        'QR-V Production Seed Certificate',
+        'QR-V Production Test Subject',
+        'QR-V Production Issuer',
+        'active',
+        1
+      ]
+    );
   } catch (_error) {
     if (IS_PRODUCTION) {
       throw new Error(`[db] migration failed in production: ${_error.message}`);
@@ -412,7 +426,7 @@ app.get('/readyz', async (_req, res) => {
     await pool.query('SELECT 1');
     return res.json({ ready: true, database: 'ok', issues: [] });
   } catch (_error) {
-    return res.status(503).json({ ready: false, database: 'unavailable', issues: [_error.message] });
+    return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
 
@@ -432,6 +446,7 @@ app.get('/ready', async (_req, res) => {
     return res.json({ ready: true, database: 'ok', issues: [] });
   } catch (_error) {
     return res.status(503).json({ ready: false, database: 'unavailable', issues: [_error.message] });
+    return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
 
