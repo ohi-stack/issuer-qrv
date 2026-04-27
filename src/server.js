@@ -15,7 +15,8 @@ const HOST_ROLE = String(process.env.HOST_ROLE || 'verify').toLowerCase();
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
-const APP_BASE_URL = process.env.APP_BASE_URL || 'https://issuer.qrv.network';
+const VERIFY_BASE_URL = process.env.VERIFY_BASE_URL || 'https://verify.qrv.network';
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || 'https://issuer.qrv.network,https://verify.qrv.network,https://qrv.network').split(',').map((v) => v.trim()).filter(Boolean);
 const ISSUER_LOGIN_PATH = process.env.ISSUER_LOGIN_PATH || '/login';
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 100);
@@ -52,7 +53,14 @@ const pool = new Pool({
 
 const app = express();
 app.disable('x-powered-by');
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS origin denied'));
+  }
+}));
 app.use(express.json());
 
 const memoryRecords = new Map();
@@ -193,6 +201,7 @@ async function auditLog(eventType, details) {
       [eventType, JSON.stringify(details)]
     );
   } catch (_error) {
+    console.warn('[audit] failed to persist', _error.message);
     console.warn('[audit] failed to persist', error.message);
   }
 }
@@ -230,6 +239,20 @@ async function migrateCertificateV1() {
       ADD COLUMN IF NOT EXISTS certificate_version integer NOT NULL DEFAULT 1;
     `);
 
+    const seedRecords = [
+      ['QRV-PROD-CERT-000001', 'QR-V Production Seed Certificate', 'QR-V Production Test Subject', 'QR-V Production Issuer', 'active', 1],
+      ['QRV-PROD-PROD-000001', 'QR-V Production Product Record', 'QR-V Batch Subject', 'QR-V Production Issuer', 'active', 1],
+      ['QRV-PROD-ID-000001', 'QR-V Production Identity Record', 'QR-V Identity Subject', 'QR-V Production Issuer', 'active', 1]
+    ];
+
+    for (const seed of seedRecords) {
+      await pool.query(
+        `INSERT INTO registry_records(qrvid, title, subject, issuer, status, certificate_version)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (qrvid) DO NOTHING`,
+        seed
+      );
+    }
     await pool.query(
       `INSERT INTO registry_records(qrvid, title, subject, issuer, status, certificate_version)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -245,19 +268,26 @@ async function migrateCertificateV1() {
     );
   } catch (_error) {
     if (IS_PRODUCTION) {
-      throw new Error(`[db] migration failed in production: ${error.message}`);
+      throw new Error(`[db] migration failed in production: ${_error.message}`);
     }
     console.warn('[db] migration skipped, falling back to in-memory mode');
-    memoryRecords.set('QRV-PROD-CERT-000001', {
-      qrvid: 'QRV-PROD-CERT-000001',
-      title: 'QR-V Production Seed Certificate',
-      subject: 'QR-V Production Test Subject',
-      issuer: 'QR-V Production Issuer',
-      status: 'active',
-      certificate_version: 1,
-      created_at: new Date().toISOString(),
-      revoked_at: null
-    });
+    const fallbackNow = new Date().toISOString();
+    for (const [qrvid, title, subject] of [
+      ['QRV-PROD-CERT-000001', 'QR-V Production Seed Certificate', 'QR-V Production Test Subject'],
+      ['QRV-PROD-PROD-000001', 'QR-V Production Product Record', 'QR-V Batch Subject'],
+      ['QRV-PROD-ID-000001', 'QR-V Production Identity Record', 'QR-V Identity Subject']
+    ]) {
+      memoryRecords.set(qrvid, {
+        qrvid,
+        title,
+        subject,
+        issuer: 'QR-V Production Issuer',
+        status: 'active',
+        certificate_version: 1,
+        created_at: fallbackNow,
+        revoked_at: null
+      });
+    }
   }
 }
 
@@ -269,7 +299,7 @@ async function readRecordById(qrvid) {
     return memoryRecords.get(qrvid);
   } catch (_error) {
     if (IS_PRODUCTION) {
-      throw new Error(`[db] read failed in production: ${error.message}`);
+      throw new Error(`[db] read failed in production: ${_error.message}`);
     }
     return memoryRecords.get(qrvid);
   }
@@ -377,6 +407,10 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), environment: NODE_ENV });
 });
 
+app.get('/ping', (_req, res) => {
+  res.json({ pong: true, timestamp: new Date().toISOString() });
+});
+
 app.get('/readyz', async (_req, res) => {
   const issues = [...getConfigIssues()];
 
@@ -411,6 +445,7 @@ app.get('/ready', async (_req, res) => {
     await pool.query('SELECT 1');
     return res.json({ ready: true, database: 'ok', issues: [] });
   } catch (_error) {
+    return res.status(503).json({ ready: false, database: 'unavailable', issues: [_error.message] });
     return res.status(503).json({ ready: false, database: 'unavailable', issues: [error.message] });
   }
 });
@@ -460,7 +495,7 @@ async function createRegistryRecord(req, res) {
     memoryRecords.set(qrvid, record);
   }
 
-  const verifyUrl = `${APP_BASE_URL}/registry/${qrvid}`;
+  const verifyUrl = `${VERIFY_BASE_URL}/${qrvid}`;
   const qrCode = await QRCode.toDataURL(verifyUrl);
   await auditLog('registry_create', { qrvid, issuer: record.issuer });
 
@@ -520,6 +555,7 @@ async function resolveVerification(qrvidRaw) {
   const qrvid = normalizeQrvid(qrvidRaw);
   const verifiedAt = new Date().toISOString();
   const payload = await getVerificationState(qrvid);
+  auditLog('registry_verify', { qrvid, status: payload.state }).catch(() => undefined);
   const statusCodeByState = {
     VERIFIED: 200,
     REVOKED: 200,
@@ -661,7 +697,7 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/:qrvid', rateLimit, async (req, res, next) => {
-  const staticRoutes = new Set(['healthz', 'readyz', 'ready', 'health', 'version', 'registry', 'records', 'verify', 'metrics']);
+  const staticRoutes = new Set(['healthz', 'readyz', 'ready', 'health', 'ping', 'version', 'registry', 'records', 'verify', 'metrics']);
   if (staticRoutes.has(req.params.qrvid)) {
     return next();
   }

@@ -1,21 +1,27 @@
 {
-  "environment": "qrv-issuer-production-convergence",
+  "environment": "qrv-production-v1",
   "monitors": [
+    {
+      "name": "marketing-root",
+      "url": "https://qrv.network",
+      "intervalSeconds": 120,
+      "expectedStatus": 200
+    },
+    {
+      "name": "registry-health",
+      "url": "https://registry.qrv.network/health",
+      "intervalSeconds": 60,
+      "expectedStatus": 200
+    },
+    {
+      "name": "api-health",
+      "url": "https://api.qrv.network/health",
+      "intervalSeconds": 60,
+      "expectedStatus": 200
+    },
     {
       "name": "issuer-dashboard",
       "url": "https://issuer.qrv.network/dashboard",
-      "intervalSeconds": 120,
-      "expectedStatus": 200
-    },
-    {
-      "name": "issuer-onboarding",
-      "url": "https://issuer.qrv.network/onboarding",
-      "intervalSeconds": 120,
-      "expectedStatus": 200
-    },
-    {
-      "name": "issuer-production-checklist",
-      "url": "https://issuer.qrv.network/production-checklist",
       "intervalSeconds": 120,
       "expectedStatus": 200
     },

@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { api, CertificateRecord, CreateCertificatePayload } from '@/lib/api';
+import { QRV_REGISTRY_BASE_URL, toVerifyUrl } from '@/lib/runtime-config';
 import { Button, Card, ErrorState } from '../shared/ui';
 import { CertificateForm } from './CertificateForm';
 import { RecipientForm } from './RecipientForm';
@@ -11,11 +12,11 @@ export function IssueCertificateWizard() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<Record<string, string>>({ qrvidPrefix: 'QRV-CERT', privacyLevel: 'PUBLIC', hashAlgorithm: 'SHA-256', registryTarget: 'registry.qrv.network' });
+  const [form, setForm] = useState<Record<string, string>>({ qrvidPrefix: 'QRV-CERT', privacyLevel: 'PUBLIC', hashAlgorithm: 'SHA-256', registryTarget: QRV_REGISTRY_BASE_URL.replace(/^https?:\/\//, '') });
   const [issued, setIssued] = useState<CertificateRecord | null>(null);
 
   const qrvid = useMemo(() => `${form.qrvidPrefix || 'QRV-CERT'}-${new Date().getUTCFullYear()}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,[form.qrvidPrefix]);
-  const verificationUrl = `https://verify.qrv.network/${issued?.qrvid ?? qrvid}`;
+  const verificationUrl = toVerifyUrl(issued?.qrvid ?? qrvid);
 
   async function submit() {
     try {
@@ -38,7 +39,7 @@ export function IssueCertificateWizard() {
         qrvidPrefix: form.qrvidPrefix,
         hashAlgorithm: 'SHA-256',
         issuerDisplay: form.issuerDisplay,
-        registryTarget: 'registry.qrv.network'
+        registryTarget: QRV_REGISTRY_BASE_URL.replace(/^https?:\/\//, '')
       };
       const created = await api.postCertificate(payload);
       setIssued(created);
@@ -57,8 +58,8 @@ export function IssueCertificateWizard() {
     {error && <ErrorState message={error} onRetry={submit} />}
     {step===1 && <CertificateForm form={form} setForm={setForm} />}
     {step===2 && <RecipientForm form={form} setForm={setForm} />}
-    {step===3 && <VerificationSettingsForm form={form} setForm={setForm} qrvid={qrvid} verificationUrl={`https://verify.qrv.network/${qrvid}`} />}
-    {step===4 && <ReviewIssuePanel form={form} qrvid={qrvid} verificationUrl={`https://verify.qrv.network/${qrvid}`} />}
+    {step===3 && <VerificationSettingsForm form={form} setForm={setForm} qrvid={qrvid} verificationUrl={toVerifyUrl(qrvid)} />}
+    {step===4 && <ReviewIssuePanel form={form} qrvid={qrvid} verificationUrl={toVerifyUrl(qrvid)} />}
     <div style={{display:'flex',gap:8,marginTop:12}}>{step>1 && <Button className="secondary" onClick={()=>setStep(step-1)}>Back</Button>}{step<4 ? <Button onClick={()=>setStep(step+1)}>Next</Button> : <Button onClick={submit} disabled={submitting}>{submitting ? 'Submitting...' : 'Submit to API'}</Button>}</div>
   </Card>;
 }

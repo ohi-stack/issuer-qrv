@@ -1,3 +1,6 @@
+import { QRV_API_BASE_URL } from '@/lib/runtime-config';
+
+export type VerifyStatus = 'VERIFIED' | 'REVOKED' | 'EXPIRED' | 'NOT_FOUND';
 import { normalizeQrvidInput } from '@/lib/verify-input';
 
 export type VerificationStatus =
@@ -21,6 +24,7 @@ export type VerificationRecord = {
   checkedAt: string;
 };
 
+const VERIFY_API_BASE_URL = QRV_API_BASE_URL;
 const API_BASE = process.env.NEXT_PUBLIC_QRV_API_BASE ?? 'https://api.qrv.network';
 
 const DEFAULTS: Omit<VerificationRecord, 'qrvid' | 'status' | 'checkedAt'> = {
@@ -51,6 +55,19 @@ function canonicalFor(qrvid: string): string {
   return `https://verify.qrv.network/verify/${encodeURIComponent(qrvid)}`;
 }
 
+function getUnavailableRecord(qrvid: string, verifiedAt: string): VerificationRecord {
+  return {
+    status: 'NOT_FOUND',
+    issuerName: 'Unavailable',
+    credentialTitle: 'Unavailable',
+    subjectDisplay: 'Unavailable',
+    issuedAt: 'Unavailable',
+    verifiedAt,
+    proofReference: 'Unavailable',
+    qrvid,
+    apiUnavailable: true,
+  };
+}
 export async function resolveVerification(rawInput: string): Promise<VerificationRecord> {
   const checkedAt = new Date().toISOString();
   const normalized = normalizeQrvidInput(rawInput);
@@ -72,6 +89,37 @@ export async function resolveVerification(rawInput: string): Promise<Verificatio
       method: 'GET',
       headers: { Accept: 'application/json' },
       cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      return getUnavailableRecord(qrvid, verifiedAt);
+    }
+
+    const rawJson = (await response.json()) as Record<string, unknown>;
+    const data = typeof rawJson.data === 'object' && rawJson.data ? (rawJson.data as Record<string, unknown>) : rawJson;
+
+    return {
+      status: normalizeStatus(data.status),
+      issuerName: asText(data.issuerName ?? data.issuer),
+      issuerLogoUrl: typeof data.issuerLogoUrl === 'string' ? data.issuerLogoUrl : undefined,
+      recordType: asText(data.recordType ?? data.record_type ?? data.type),
+      credentialTitle: asText(data.credentialTitle ?? data.title),
+      subjectDisplay: asText(data.subjectDisplay ?? data.recipientName ?? data.subject),
+      issuedAt: asText(data.issuedAt ?? data.issueDate ?? data.created_at),
+      verifiedAt,
+      proofReference: deriveProofReference(data),
+      qrvid: asText(data.qrvid, qrvid),
+    };
+  } catch {
+    return getUnavailableRecord(qrvid, verifiedAt);
+  }
+}
+
+export function formatDate(rawDate: string): string {
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return rawDate;
+
     });
 
     if (response.status === 404) {

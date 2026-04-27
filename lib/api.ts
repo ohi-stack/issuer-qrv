@@ -2,7 +2,9 @@ import { mockAnalytics, mockApiKeys, mockAudit, mockCertificates } from '@/lib/m
 import { normalizeAnalyticsSummary, normalizeApiKey, normalizeAuditEvent, normalizeCertificateRecord, normalizeIssuer } from '@/lib/normalize';
 import { AnalyticsSummary, ApiKeyRecord, AuditEvent, CertificateRecord, Issuer } from '@/types/models';
 
-const API_BASE = process.env.NEXT_PUBLIC_QRV_API_BASE_URL ?? 'https://api.qrv.network';
+import { QRV_API_BASE_URL } from '@/lib/runtime-config';
+
+const API_BASE = QRV_API_BASE_URL;
 const allowMockFallback = process.env.NODE_ENV === 'development';
 
 export class ApiError extends Error {
