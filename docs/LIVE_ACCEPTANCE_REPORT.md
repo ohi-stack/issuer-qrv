@@ -1,36 +1,61 @@
 # QR-V Live Acceptance Report
 
 Date: 2026-04-27 (UTC)
-Target QRVID: `QRV-PROD-CERT-000001`
+Target: `https://verify.qrv.network`
+Audit focus: `/`, `/verify/QRV-DEMO-001`, `/help`, `/scan`
 
-## Scope
-This workspace currently contains only `issuer-qrv`. Cross-repo synchronization was audited for local availability and scripted checks were added so the same process can be run once sibling repos are mounted.
+## Commands executed
+- `curl -sS -D - "https://verify.qrv.network/"`
+- `curl -sS -D - "https://verify.qrv.network/verify/QRV-DEMO-001"`
+- `curl -sS -D - "https://verify.qrv.network/help"`
+- `curl -sS -D - "https://verify.qrv.network/scan"`
+- `npm run acceptance:live`
 
-## Repository Availability Audit (`npm run audit:repo-family`)
-- issuer-qrv: present
-- qrv-api: missing in workspace
-- qrv-registry: missing in workspace
-- qrv-verify: missing in workspace
-- qrv-demo-records: missing in workspace
-- qrv-status: missing in workspace
-- qrv-infra: missing in workspace
-- qrv-security: missing in workspace
+## Production observations (exact current state)
+All audited routes are currently blocked at the Hostinger edge with `HTTP 429 Too Many Requests` and empty response bodies:
 
-## Live Acceptance Run (`npm run acceptance:live`)
-Observed statuses:
-- `issuer.qrv.network/health` -> `429`
-- `api.qrv.network/health` -> `429`
-- `api.qrv.network/ping` -> `429`
-- `api.qrv.network/version` -> `429`
-- `registry.qrv.network/health` -> `429`
-- `verify.qrv.network/health` -> `429`
-- `verify.qrv.network/api/v1/verify/QRV-PROD-CERT-000001` -> `429`
-- `verify.qrv.network/QRV-PROD-CERT-000001` -> `429`
+- `/` -> `429`
+- `/verify/QRV-DEMO-001` -> `429`
+- `/help` -> `429`
+- `/scan` -> `429`
 
-## Acceptance Outcome
-Full live production acceptance is currently **blocked** by upstream HTTP `429 Too Many Requests` responses across all public hosts during this run.
+Headers consistently include:
+- `platform: hostinger`
+- `panel: hpanel`
+- `server: envoy`
 
-## Next Actions
-1. Adjust WAF/rate-limit rules to allow health/acceptance probe traffic from CI/ops runner.
-2. Re-run `npm run acceptance:live` once probe traffic is allowlisted.
-3. Mount remaining repos and run `npm run audit:repo-family` until all required repos are available.
+Result: live UI HTML cannot be inspected from this runner because WAF/rate-limit policy blocks all page responses.
+
+## Runtime determination (Next.js vs legacy Express)
+### Confirmed
+- The live edge currently serves only rate-limit responses (`429`), not application HTML, for all requested paths.
+
+### High-confidence inference from deploy preset in this repo
+- Hostinger preset in `docs/deployment-hostinger.md` is currently Node app mode with startup entrypoint `server.js` (Express service), not `next start`.
+- `src/server.js` defines legacy HTML routes for `/`, `/verify/:id`, and `/:qrvid`.
+
+Conclusion: the configured Hostinger runtime preset is legacy Express-oriented. The currently served production UI cannot be directly fingerprinted from this environment due universal `429` responses.
+
+## Remediation plan (no-downtime migration to Next.js)
+1. **Prepare Next.js runtime in staging hostname first**
+   - Configure staging app in Hostinger with:
+     - Node `22.x`
+     - Install: `npm ci`
+     - Build: `npm run build`
+     - Start: `npm start` (runs `next start`)
+   - Ensure all production env vars are present.
+2. **Health-check gating before cutover**
+   - Validate staged routes: `/`, `/verify/QRV-DEMO-001`, `/help`, `/scan`, `/api/v1/verify/:qrvid`, `/health`.
+   - Capture smoke output and confirm no fallback to Express templates.
+3. **Blue/green cutover**
+   - Keep current Express app live (blue).
+   - Bring Next.js app live on alternate app target (green).
+   - Switch `verify.qrv.network` upstream target to green.
+   - Keep blue running for rapid rollback during bake window.
+4. **Rollback safety**
+   - If KPI/uptime errors appear, repoint upstream to blue immediately.
+5. **Finalize**
+   - After bake window passes, decommission blue or retain as warm standby.
+
+## Immediate blocker to resolve first
+- Allowlist CI/ops probe traffic (or relax WAF path rules) so acceptance probes can receive actual app responses instead of platform `429`.
