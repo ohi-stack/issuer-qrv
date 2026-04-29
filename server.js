@@ -114,6 +114,83 @@ function recordForm(prefill = {}, error = '') {
   </div>`;
 }
 
+const landingPages = [
+  {
+    slug: 'verified-certificates',
+    title: 'Verified Certificates',
+    subtitle: 'Issue tamper-evident certificates that anyone can verify instantly with a QR scan.',
+    benefits: ['Prevent fraud and forgery', 'Boost trust with verifiable proof', 'Share globally with a single secure link'],
+    cta: 'Launch Certificate Verification'
+  },
+  {
+    slug: 'product-authentication',
+    title: 'Product Authentication',
+    subtitle: 'Help customers confirm products are genuine at purchase, delivery, and resale.',
+    benefits: ['Reduce counterfeit claims', 'Protect brand reputation', 'Enable real-time authenticity checks'],
+    cta: 'Secure Your Product Line'
+  },
+  {
+    slug: 'warranty-verification',
+    title: 'Warranty Verification',
+    subtitle: 'Digitize warranty records with immutable proof tied to every item and owner.',
+    benefits: ['Shorten claim processing time', 'Block fake warranty submissions', 'Give service teams trusted source data'],
+    cta: 'Modernize Warranty Workflows'
+  },
+  {
+    slug: 'event-tickets',
+    title: 'Event Tickets',
+    subtitle: 'Deliver verifiable tickets with one-scan validation to stop duplicate or fake entries.',
+    benefits: ['Prevent ticket fraud at the gate', 'Speed up check-in operations', 'Track attendance with trusted audit trails'],
+    cta: 'Protect Event Access'
+  },
+  {
+    slug: 'identity-verification',
+    title: 'Identity Verification',
+    subtitle: 'Verify identity documents quickly with cryptographic-backed proof and traceability.',
+    benefits: ['Streamline onboarding and KYC', 'Lower identity spoofing risk', 'Share selective identity data securely'],
+    cta: 'Strengthen Identity Trust'
+  },
+  {
+    slug: 'real-estate-documents',
+    title: 'Real Estate Documents',
+    subtitle: 'Secure titles, disclosures, leases, and transaction records with verifiable document history.',
+    benefits: ['Reduce document tampering disputes', 'Accelerate due diligence checks', 'Create confidence across buyers and agents'],
+    cta: 'Secure Property Records'
+  },
+  {
+    slug: 'academic-credentials',
+    title: 'Academic Credentials',
+    subtitle: 'Issue digitally verifiable diplomas and transcripts for instant employer validation.',
+    benefits: ['Eliminate credential fraud', 'Enable one-click authenticity checks', 'Support lifelong learner portability'],
+    cta: 'Digitize Academic Credentials'
+  }
+];
+
+function marketingLayout({ title, body }) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root{--bg:#050913;--panel:#0f1b2d;--line:#223454;--text:#eef6ff;--muted:#9bb2d1;--accent:#2fb7ff}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at top,#102745 0,#050913 60%);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:40px 20px 60px}
+    .card{background:rgba(15,27,45,.9);border:1px solid var(--line);border-radius:22px;padding:28px}
+    h1{margin:0 0 12px;font-size:40px;line-height:1.1}p{line-height:1.6}
+    .muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+    .tile{display:block;color:#fff;text-decoration:none;background:rgba(9,18,33,.86);border:1px solid var(--line);border-radius:16px;padding:16px}
+    .tile:hover{border-color:rgba(47,183,255,.55);transform:translateY(-1px)}
+    ul{margin:0;padding-left:20px;display:grid;gap:8px}.btn{display:inline-block;background:linear-gradient(180deg,#37c4ff,#1677ff);color:#fff;text-decoration:none;border-radius:12px;padding:12px 16px;font-weight:800}
+  </style>
+</head>
+<body>
+  <main class="wrap">${body}</main>
+</body>
+</html>`;
+}
+
 app.get('/', (_req, res) => {
   const body = `<div class="card">
     <h1>Issuer Dashboard</h1>
@@ -121,6 +198,42 @@ app.get('/', (_req, res) => {
     <p><a class="btn" href="/records/new">Create Record</a> <a class="btn secondary" href="/records">View Records</a></p>
   </div>`;
   res.type('html').send(shellLayout({ title: 'Issuer Dashboard', active: 'dashboard', body }));
+});
+
+app.get('/landing-pages', (_req, res) => {
+  const tiles = landingPages
+    .map(
+      (page) => `<a class="tile" href="/landing-pages/${escapeHtml(page.slug)}">
+        <strong>${escapeHtml(page.title)}</strong>
+        <p class="muted">${escapeHtml(page.subtitle)}</p>
+      </a>`
+    )
+    .join('');
+
+  const body = `<section class="card">
+    <h1>QRV Landing Pages</h1>
+    <p class="muted">Explore launch-ready pages for core verification use cases.</p>
+    <div class="grid">${tiles}</div>
+  </section>`;
+  res.type('html').send(marketingLayout({ title: 'QRV Landing Pages', body }));
+});
+
+app.get('/landing-pages/:slug', (req, res) => {
+  const page = landingPages.find((entry) => entry.slug === req.params.slug);
+  if (!page) {
+    return res.status(404).type('html').send(marketingLayout({ title: 'Not Found', body: '<section class="card"><h1>Page not found</h1></section>' }));
+  }
+
+  const body = `<section class="card">
+    <p><a class="muted" href="/landing-pages">← Back to all landing pages</a></p>
+    <h1>${escapeHtml(page.title)}</h1>
+    <p class="muted">${escapeHtml(page.subtitle)}</p>
+    <h3>Why teams choose QRV</h3>
+    <ul>${page.benefits.map((benefit) => `<li>${escapeHtml(benefit)}</li>`).join('')}</ul>
+    <p style="margin-top:20px"><a class="btn" href="/records/new">${escapeHtml(page.cta)}</a></p>
+  </section>`;
+
+  return res.type('html').send(marketingLayout({ title: page.title, body }));
 });
 
 app.get('/records', (_req, res) => {
