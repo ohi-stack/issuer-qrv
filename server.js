@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const crypto = require('crypto');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -14,6 +15,11 @@ const PORT = Number(process.env.PORT || 3000);
 const VERSION = process.env.APP_VERSION || process.env.npm_package_version || '1.0.0';
 const REGISTRY_BASE_URL = (process.env.REGISTRY_BASE_URL || 'https://registry.qrv.network').replace(/\/$/, '');
 const ISSUER_NAME = process.env.ISSUER_NAME || 'issuer.qrv.network';
+const AUTH_USER = process.env.ISSUER_DASHBOARD_USER || 'admin@issuer.qrv.network';
+const AUTH_PASS = process.env.ISSUER_DASHBOARD_PASS || 'change-me';
+const JWT_SECRET = process.env.JWT_SECRET || 'issuer-qrv-local-dev-secret';
+const JWT_EXPIRES_IN_SECONDS = Number(process.env.JWT_EXPIRES_IN_SECONDS || 60 * 60 * 8);
+const TOKEN_COOKIE = 'issuer_session';
 const CORS_ALLOWLIST = (process.env.CORS_ALLOWLIST || process.env.CORS_ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -136,11 +142,86 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function shellLayout({ title, active, body }) {
+function parseCookies(cookieHeader = '') {
+  return cookieHeader.split(';').reduce((acc, part) => {
+    const [name, ...rest] = part.trim().split('=');
+    if (!name) return acc;
+    acc[name] = decodeURIComponent(rest.join('='));
+    return acc;
+  }, {});
+}
+
+function base64url(input) {
+  return Buffer.from(input)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function signJwt(payload) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const body = { ...payload, iat: now, exp: now + JWT_EXPIRES_IN_SECONDS };
+  const encodedHeader = base64url(JSON.stringify(header));
+  const encodedPayload = base64url(JSON.stringify(body));
+  const signature = crypto
+    .createHmac('sha256', JWT_SECRET)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
+}
+
+function verifyJwt(token) {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  const [encodedHeader, encodedPayload, signature] = parts;
+  const expected = crypto
+    .createHmac('sha256', JWT_SECRET)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  if (expected !== signature) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+    if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function authGuard(req, res, next) {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies[TOKEN_COOKIE];
+  const user = verifyJwt(token);
+
+  if (!user) {
+    return res.redirect('/login');
+  }
+
+  req.user = user;
+  return next();
+}
+
+function shellLayout({ title, active, body, userEmail }) {
   const nav = [
     ['dashboard', '/', 'Dashboard'],
-    ['records', '/records', 'Records'],
     ['create', '/records/new', 'Create Record'],
+    ['records', '/records', 'My Records'],
+    ['billing', '/billing', 'Billing'],
+    ['api-keys', '/api-keys', 'API Keys'],
+    ['settings', '/settings', 'Account Settings']
     ['leads', '/leads', 'Leads'],
     ['create-lead', '/leads/new', 'Create Lead'],
     ['api-keys', '/api-keys', 'API Keys'],
@@ -155,12 +236,13 @@ function shellLayout({ title, active, body }) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
   <style>
+    :root{--bg:#07111f;--panel:#0f1b2d;--line:#263a5c;--text:#eef6ff;--muted:#a9bdd8;--accent:#2fb7ff;--good:#21c978;--bad:#ef4444}
     :root{--bg:#07111f;--panel:#0f1b2d;--line:#263a5c;--text:#eef6ff;--muted:#a9bdd8;--accent:#2fb7ff;--gold:#f2d06b;--good:#21c978;--bad:#ef4444;--warn:#f59e0b}
     *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at top left,#12345e 0,#07111f 42%,#030712 100%);color:var(--text)}
     .shell{display:grid;grid-template-columns:270px 1fr;min-height:100vh}
     .side{border-right:1px solid var(--line);background:rgba(7,17,31,.92);padding:24px;position:sticky;top:0;height:100vh}
     .brand{font-weight:900;font-size:22px;letter-spacing:-.02em}.tag{color:var(--muted);font-size:13px;line-height:1.5;margin-top:6px}
-    .nav{display:grid;gap:8px;margin-top:28px}.nav a{color:var(--muted);text-decoration:none;padding:12px 14px;border-radius:14px;border:1px solid transparent}
+    .nav{display:grid;gap:8px;margin-top:20px}.nav a{color:var(--muted);text-decoration:none;padding:12px 14px;border-radius:14px;border:1px solid transparent}
     .nav a.active,.nav a:hover{color:#fff;background:rgba(47,183,255,.12);border-color:rgba(47,183,255,.22)}
     .main{padding:28px;max-width:1200px}.card{background:rgba(15,27,45,.88);border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.22)}
     h1{margin:0 0 12px}.muted{color:var(--muted)}.stack{display:grid;gap:16px}.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -182,9 +264,10 @@ function shellLayout({ title, active, body }) {
   <div class="shell">
     <aside class="side">
       <div class="brand">QR-V™ Issuer</div>
-      <div class="tag">Issuer portal for creating registry-backed verifiable records.</div>
+      <div class="tag">Production issuer portal for registry-backed records.</div>
+      ${userEmail ? `<div class="tag">Signed in as <strong>${escapeHtml(userEmail)}</strong></div>` : ''}
       <nav class="nav">${nav.map(([key, href, label]) => `<a class="${active === key ? 'active' : ''}" href="${href}">${label}</a>`).join('')}</nav>
-      <div class="tag" style="margin-top:24px">Registry: ${escapeHtml(REGISTRY_BASE_URL)}<br/>Version: ${escapeHtml(VERSION)}</div>
+      <form method="post" action="/logout" style="margin-top:12px"><button class="btn secondary" type="submit">Logout</button></form>
     </aside>
     <main class="main stack">${body}</main>
   </div>
@@ -192,6 +275,15 @@ function shellLayout({ title, active, body }) {
 </html>`;
 }
 
+function loginPage(error = '') {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Issuer Login</title>
+  <style>body{margin:0;display:grid;place-items:center;min-height:100vh;font-family:Inter,Arial,sans-serif;background:#030712;color:#eef6ff}.card{background:#0f1b2d;padding:28px;border:1px solid #263a5c;border-radius:18px;min-width:360px}.bad{color:#ef4444}.stack{display:grid;gap:14px}label{display:block;margin-bottom:6px;font-weight:700}input{width:100%;padding:10px;background:#081426;border:1px solid #263a5c;border-radius:10px;color:#fff}button{width:100%;padding:11px;border:0;border-radius:10px;background:linear-gradient(180deg,#37c4ff,#1677ff);color:#fff;font-weight:800;cursor:pointer}</style>
+  </head><body><form class="card stack" method="post" action="/login"><h1>Issuer Login</h1><p>Sign in to access dashboard.</p>${error ? `<p class="bad">${escapeHtml(error)}</p>` : ''}<div><label for="email">Email</label><input id="email" type="email" name="email" required/></div><div><label for="password">Password</label><input id="password" type="password" name="password" required/></div><button type="submit">Sign in</button></form></body></html>`;
+}
+
+function recordForm(prefill = {}, error = '') { /* unchanged */
+  return `<div class="card"><h1>Create Record</h1><p class="muted">Issue a new verifiable record on <span class="code">registry.qrv.network</span>.</p>${error ? `<p class="bad"><strong>Error:</strong> ${escapeHtml(error)}</p>` : ''}<form method="post" action="/records/create" class="stack"><div class="row"><div><label for="recordType">Record Type</label><input id="recordType" name="recordType" required value="${escapeHtml(prefill.recordType || 'certificate')}" /></div><div><label for="visibility">Visibility</label><select id="visibility" name="visibility" required>${['public', 'private', 'restricted'].map((v) => `<option value="${v}" ${prefill.visibility === v || (!prefill.visibility && v === 'public') ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div><div class="row"><div><label for="title">Title</label><input id="title" name="title" required value="${escapeHtml(prefill.title || '')}" /></div><div><label for="subject">Subject</label><input id="subject" name="subject" required value="${escapeHtml(prefill.subject || '')}" /></div></div><div class="row"><div><label for="issuer">Issuer</label><input id="issuer" name="issuer" required value="${escapeHtml(prefill.issuer || ISSUER_NAME)}" /></div></div><div><label for="description">Description</label><textarea id="description" name="description" rows="4" required>${escapeHtml(prefill.description || '')}</textarea></div><div><button type="submit">Create Registry Record</button></div></form></div>`;
+}
 
 function docsPortalBody() {
   const openApiSpec = `openapi: 3.1.0
@@ -657,36 +749,31 @@ app.get('/landing-pages/:slug', (req, res) => {
   return res.type('html').send(marketingLayout({ title: page.title, body }));
 });
 
-app.get('/records', (_req, res) => {
-  const rows = recentRecords.length
-    ? recentRecords
-        .map(
-          (record) => `<tr>
-              <td><span class="code">${escapeHtml(record.qrvid || 'N/A')}</span></td>
-              <td>${escapeHtml(record.title || '—')}</td>
-              <td>${escapeHtml(record.subject || '—')}</td>
-              <td class="ok">${escapeHtml(record.status || 'CREATED')}</td>
-              <td><a href="${escapeHtml(record.verifyUrl || '#')}" target="_blank" rel="noreferrer">Verify</a></td>
-            </tr>`
-        )
-        .join('')
-    : '<tr><td colspan="5" class="muted">No records created in this server session yet.</td></tr>';
+app.get('/login', (_req, res) => res.type('html').send(loginPage()));
 
-  const body = `<div class="card">
-    <h1>Records</h1>
-    <table>
-      <thead><tr><th>QRVID</th><th>Title</th><th>Subject</th><th>Status</th><th>Verify</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+app.post('/login', (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  if (email !== AUTH_USER.toLowerCase() || password !== AUTH_PASS) {
+    return res.status(401).type('html').send(loginPage('Invalid credentials.'));
+  }
 
-  res.type('html').send(shellLayout({ title: 'Records', active: 'records', body }));
+  const token = signJwt({ sub: email, role: 'issuer-admin' });
+  res.setHeader('Set-Cookie', `${TOKEN_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${JWT_EXPIRES_IN_SECONDS}`);
+  return res.redirect('/');
 });
 
-app.get('/records/new', (_req, res) => {
-  res.type('html').send(shellLayout({ title: 'Create Record', active: 'create', body: recordForm() }));
+app.post('/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', `${TOKEN_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+  res.redirect('/login');
 });
 
+app.use(authGuard);
+
+app.get('/', (req, res) => {
+  const body = `<div class="card"><h1>Issuer Dashboard</h1><p class="muted">Create and manage verifiable records from issuer.qrv.network.</p><p><a class="btn" href="/records/new">Create Record</a> <a class="btn secondary" href="/records">My Records</a></p></div>`;
+  res.type('html').send(shellLayout({ title: 'Issuer Dashboard', active: 'dashboard', body, userEmail: req.user.sub }));
+});
 app.get('/leads', (_req, res) => {
   const rows = leads.length
     ? leads
@@ -792,59 +879,38 @@ app.post('/records/create', async (req, res) => {
       body: JSON.stringify(payload)
     });
 
-    let data = null;
-    try {
-      data = await response.json();
-    } catch (_error) {
-      data = null;
-    }
+app.get('/records', (req, res) => {
+  const rows = recentRecords.length ? recentRecords.map((record) => `<tr><td><span class="code">${escapeHtml(record.qrvid || 'N/A')}</span></td><td>${escapeHtml(record.title || '—')}</td><td>${escapeHtml(record.subject || '—')}</td><td class="ok">${escapeHtml(record.status || 'CREATED')}</td><td><a href="${escapeHtml(record.verifyUrl || '#')}" target="_blank" rel="noreferrer">Verify</a></td></tr>`).join('') : '<tr><td colspan="5" class="muted">No records created in this server session yet.</td></tr>';
+  const body = `<div class="card"><h1>My Records</h1><table><thead><tr><th>QRVID</th><th>Title</th><th>Subject</th><th>Status</th><th>Verify</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  res.type('html').send(shellLayout({ title: 'My Records', active: 'records', body, userEmail: req.user.sub }));
+});
 
-    if (!response.ok) {
-      return res.status(502).type('html').send(
-        shellLayout({
-          title: 'Create Failed',
-          active: 'create',
-          body: `<div class="card"><h1>Create Record Failed</h1><p class="bad">The issuer portal could not create a record right now. Please try again shortly.</p><p class="muted">Registry response status: ${response.status}</p><p><a class="btn" href="/records/new">Try Again</a></p></div>`
-        })
-      );
-    }
+app.get('/records/new', (req, res) => res.type('html').send(shellLayout({ title: 'Create Record', active: 'create', body: recordForm(), userEmail: req.user.sub })));
 
+app.post('/records/create', async (req, res) => {
+  const payload = { recordType: String(req.body.recordType || '').trim(), title: String(req.body.title || '').trim(), subject: String(req.body.subject || '').trim(), issuer: String(req.body.issuer || '').trim(), description: String(req.body.description || '').trim(), visibility: String(req.body.visibility || '').trim() };
+  const missing = Object.entries(payload).filter(([, value]) => !value).map(([key]) => key);
+  if (missing.length) return res.status(400).type('html').send(shellLayout({ title: 'Create Record', active: 'create', userEmail: req.user.sub, body: recordForm(payload, `Missing required fields: ${missing.join(', ')}`) }));
+  try {
+    const response = await fetch(`${REGISTRY_BASE_URL}/records`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    let data = null; try { data = await response.json(); } catch (_error) { data = null; }
+    if (!response.ok) return res.status(502).type('html').send(shellLayout({ title: 'Create Failed', active: 'create', userEmail: req.user.sub, body: `<div class="card"><h1>Create Record Failed</h1><p class="bad">The issuer portal could not create a record right now. Please try again shortly.</p><p class="muted">Registry response status: ${response.status}</p><p><a class="btn" href="/records/new">Try Again</a></p></div>` }));
     const qrvid = data?.qrvid || data?.record?.qrvid || data?.id || 'N/A';
     const status = data?.status || data?.record?.status || 'CREATED';
     const hash = data?.hash || data?.record?.hash || 'N/A';
     const canonicalVerifyUrl = data?.verifyUrl || data?.canonicalVerifyUrl || `https://verify.qrv.network/${encodeURIComponent(qrvid)}`;
     const registryJsonUrl = data?.registryJsonUrl || `${REGISTRY_BASE_URL}/records/${encodeURIComponent(qrvid)}.json`;
-
-    recentRecords.unshift({ qrvid, status, hash, verifyUrl: canonicalVerifyUrl, title: payload.title, subject: payload.subject });
-    if (recentRecords.length > 50) recentRecords.length = 50;
-
-    const body = `<div class="card">
-      <h1>Record Created</h1>
-      <p class="ok"><strong>Success:</strong> Registry record issued.</p>
-      <table>
-        <tbody>
-          <tr><th>QRVID</th><td><span class="code">${escapeHtml(qrvid)}</span></td></tr>
-          <tr><th>Status</th><td>${escapeHtml(status)}</td></tr>
-          <tr><th>Hash</th><td><span class="code">${escapeHtml(hash)}</span></td></tr>
-          <tr><th>Canonical Verify URL</th><td><a href="${escapeHtml(canonicalVerifyUrl)}" target="_blank" rel="noreferrer">${escapeHtml(canonicalVerifyUrl)}</a></td></tr>
-          <tr><th>Registry JSON URL</th><td><a href="${escapeHtml(registryJsonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(registryJsonUrl)}</a></td></tr>
-        </tbody>
-      </table>
-      <p style="margin-top:16px"><a class="btn" href="/records/new">Create Another Record</a> <a class="btn secondary" href="/records">Go to Records</a></p>
-    </div>`;
-
-    return res.type('html').send(shellLayout({ title: 'Record Created', active: 'create', body }));
+    recentRecords.unshift({ qrvid, status, hash, verifyUrl: canonicalVerifyUrl, title: payload.title, subject: payload.subject }); if (recentRecords.length > 50) recentRecords.length = 50;
+    const body = `<div class="card"><h1>Record Created</h1><p class="ok"><strong>Success:</strong> Registry record issued.</p><table><tbody><tr><th>QRVID</th><td><span class="code">${escapeHtml(qrvid)}</span></td></tr><tr><th>Status</th><td>${escapeHtml(status)}</td></tr><tr><th>Hash</th><td><span class="code">${escapeHtml(hash)}</span></td></tr><tr><th>Canonical Verify URL</th><td><a href="${escapeHtml(canonicalVerifyUrl)}" target="_blank" rel="noreferrer">${escapeHtml(canonicalVerifyUrl)}</a></td></tr><tr><th>Registry JSON URL</th><td><a href="${escapeHtml(registryJsonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(registryJsonUrl)}</a></td></tr></tbody></table><p style="margin-top:16px"><a class="btn" href="/records/new">Create Another Record</a> <a class="btn secondary" href="/records">Go to My Records</a></p></div>`;
+    return res.type('html').send(shellLayout({ title: 'Record Created', active: 'create', body, userEmail: req.user.sub }));
   } catch (_error) {
-    return res.status(502).type('html').send(
-      shellLayout({
-        title: 'Create Failed',
-        active: 'create',
-        body: '<div class="card"><h1>Create Record Failed</h1><p class="bad">Unable to reach the registry service right now. Please retry in a moment.</p><p><a class="btn" href="/records/new">Try Again</a></p></div>'
-      })
-    );
+    return res.status(502).type('html').send(shellLayout({ title: 'Create Failed', active: 'create', userEmail: req.user.sub, body: '<div class="card"><h1>Create Record Failed</h1><p class="bad">Unable to reach the registry service right now. Please retry in a moment.</p><p><a class="btn" href="/records/new">Try Again</a></p></div>' }));
   }
 });
 
+app.get('/billing', (req, res) => res.type('html').send(shellLayout({ title: 'Billing', active: 'billing', userEmail: req.user.sub, body: '<div class="card"><h1>Billing</h1><p class="muted">Plan, invoices, and payment methods will appear here.</p></div>' })));
+app.get('/api-keys', (req, res) => res.type('html').send(shellLayout({ title: 'API Keys', active: 'api-keys', userEmail: req.user.sub, body: '<div class="card"><h1>API Keys</h1><p class="muted">Issuer API key management will be surfaced here.</p></div>' })));
+app.get('/settings', (req, res) => res.type('html').send(shellLayout({ title: 'Account Settings', active: 'settings', userEmail: req.user.sub, body: '<div class="card"><h1>Account Settings</h1><p class="muted">Manage profile, security, and notification preferences.</p></div>' })));
 
 app.get('/docs', (_req, res) => {
   const body = docsPortalBody();
@@ -1025,13 +1091,12 @@ app.get('/version', (_req, res) => {
   res.status(200).json(serviceStatusResponse());
 });
 
-app.get('/healthz', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
-
-app.get('/readyz', (_req, res) => {
-  res.status(200).json({ status: 'ready' });
-});
+function serviceStatusResponse() { return { status: 'ok', service: 'qrv-api', version: VERSION, timestamp: new Date().toISOString() }; }
+app.get('/health', (_req, res) => res.status(200).json(serviceStatusResponse()));
+app.get('/ping', (_req, res) => res.status(200).json(serviceStatusResponse()));
+app.get('/version', (_req, res) => res.status(200).json(serviceStatusResponse()));
+app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/readyz', (_req, res) => res.status(200).json({ status: 'ready' }));
 
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;
