@@ -5,12 +5,17 @@ const PORT = Number(process.env.PORT || 3000);
 const VERSION = process.env.APP_VERSION || process.env.npm_package_version || '1.0.0';
 const REGISTRY_BASE_URL = (process.env.REGISTRY_BASE_URL || 'https://registry.qrv.network').replace(/\/$/, '');
 const ISSUER_NAME = process.env.ISSUER_NAME || 'issuer.qrv.network';
+const MONITOR_INTERVAL_MS = Number(process.env.MONITOR_INTERVAL_MS || 60000);
+const MONITORED_HOSTS = ['qrv.network', 'api.qrv.network', 'verify.qrv.network', 'issuer.qrv.network', 'registry.qrv.network'];
 
 app.disable('x-powered-by');
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '1mb' }));
 
 const recentRecords = [];
+const monitorState = new Map(
+  MONITORED_HOSTS.map((host) => [host, { checks: 0, failures: 0, lastOutageAt: null, lastResponseTimeMs: null, currentStatus: 'unknown' }])
+);
 const leadTargets = [
   'schools',
   'online course creators',
@@ -49,7 +54,7 @@ function shellLayout({ title, active, body }) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
   <style>
-    :root{--bg:#07111f;--panel:#0f1b2d;--line:#263a5c;--text:#eef6ff;--muted:#a9bdd8;--accent:#2fb7ff;--gold:#f2d06b;--good:#21c978;--bad:#ef4444}
+    :root{--bg:#07111f;--panel:#0f1b2d;--line:#263a5c;--text:#eef6ff;--muted:#a9bdd8;--accent:#2fb7ff;--gold:#f2d06b;--good:#21c978;--bad:#ef4444;--warn:#f59e0b}
     *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at top left,#12345e 0,#07111f 42%,#030712 100%);color:var(--text)}
     .shell{display:grid;grid-template-columns:270px 1fr;min-height:100vh}
     .side{border-right:1px solid var(--line);background:rgba(7,17,31,.92);padding:24px;position:sticky;top:0;height:100vh}
@@ -64,6 +69,11 @@ function shellLayout({ title, active, body }) {
     table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
     th{color:#9fb7d6;text-transform:uppercase;font-size:12px;letter-spacing:.08em}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px}
     .ok{color:var(--good)}.bad{color:var(--bad)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+    .badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;border:1px solid}
+    .badge.ok{background:rgba(33,201,120,.14);border-color:rgba(33,201,120,.45)}
+    .badge.bad{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.45)}
+    .badge.warn{color:#fde7b0;background:rgba(245,158,11,.16);border-color:rgba(245,158,11,.48)}
     @media(max-width:900px){.shell{grid-template-columns:1fr}.side{height:auto;position:relative}.row{grid-template-columns:1fr}}
   </style>
 </head>
@@ -254,6 +264,48 @@ function recordForm(prefill = {}, error = '') {
   </div>`;
 }
 
+function formatTimestamp(value) {
+  if (!value) return 'No outages detected';
+  return `${new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })} UTC`;
+}
+
+function buildStatusRows() {
+  return MONITORED_HOSTS.map((host) => {
+    const state = monitorState.get(host);
+    const uptimePercent = state.checks ? (((state.checks - state.failures) / state.checks) * 100).toFixed(2) : '—';
+    const responseTime = state.lastResponseTimeMs == null ? '—' : `${state.lastResponseTimeMs} ms`;
+    const statusClass = state.currentStatus === 'up' ? 'ok' : state.currentStatus === 'down' ? 'bad' : 'warn';
+    const statusLabel = state.currentStatus === 'up' ? 'Operational' : state.currentStatus === 'down' ? 'Outage' : 'Checking';
+    return `<tr><td><span class="code">${escapeHtml(host)}</span></td><td>${uptimePercent}${uptimePercent === '—' ? '' : '%'}</td><td>${escapeHtml(
+      responseTime
+    )}</td><td>${escapeHtml(formatTimestamp(state.lastOutageAt))}</td><td><span class="badge ${statusClass}">${statusLabel}</span></td></tr>`;
+  }).join('');
+}
+
+async function checkHost(host) {
+  const startedAt = Date.now();
+  let failed = false;
+  try {
+    const response = await fetch(`https://${host}/healthz`, { method: 'GET', redirect: 'follow' });
+    if (!response.ok) failed = true;
+  } catch (_error) {
+    failed = true;
+  }
+
+  const state = monitorState.get(host);
+  state.checks += 1;
+  state.lastResponseTimeMs = Date.now() - startedAt;
+  if (failed) {
+    state.failures += 1;
+    state.currentStatus = 'down';
+    state.lastOutageAt = new Date().toISOString();
+  } else {
+    state.currentStatus = 'up';
+  }
+}
+
+function runMonitoringCycle() {
+  return Promise.all(MONITORED_HOSTS.map((host) => checkHost(host)));
 function marketingLayout({ title, heading, eyebrow, description, nextStep }) {
   const ctaLabel = 'Start Issuing Verified Records';
   const ctaHref = '/book-demo';
@@ -375,6 +427,22 @@ app.get('/', (_req, res) => {
     .join('');
 
   const body = `<div class="card">
+    <h1>QRV Uptime Dashboard</h1>
+    <p class="muted">Live uptime summary for critical QRV services.</p>
+    <div class="grid" style="margin:18px 0 10px">
+      ${MONITORED_HOSTS.map((host) => {
+        const state = monitorState.get(host);
+        const badgeClass = state.currentStatus === 'up' ? 'ok' : state.currentStatus === 'down' ? 'bad' : 'warn';
+        const badgeText = state.currentStatus === 'up' ? 'UP' : state.currentStatus === 'down' ? 'DOWN' : 'PENDING';
+        return `<div class="card"><strong>${escapeHtml(host)}</strong><div style="margin-top:10px"><span class="badge ${badgeClass}">${badgeText}</span></div></div>`;
+      }).join('')}
+    </div>
+    <table>
+      <thead><tr><th>Service</th><th>Uptime %</th><th>Response Time</th><th>Last Outage</th><th>Status Badge</th></tr></thead>
+      <tbody>${buildStatusRows()}</tbody>
+    </table>
+  </div>`;
+  res.type('html').send(shellLayout({ title: 'QRV Uptime Dashboard', active: 'dashboard', body }));
     <h1>Gregory Founder Command Center</h1>
     <p class="muted">Live founder snapshot across issuing, verification, pipeline, and revenue motion.</p>
     <p><a class="btn" href="/records/new">Create Record</a> <a class="btn secondary" href="/records">View Records</a></p>
@@ -672,3 +740,8 @@ app.get('/readyz', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`issuer-qrv listening on :${PORT}`);
 });
+
+runMonitoringCycle().catch(() => {});
+setInterval(() => {
+  runMonitoringCycle().catch(() => {});
+}, MONITOR_INTERVAL_MS);
