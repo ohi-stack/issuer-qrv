@@ -11,6 +11,15 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '1mb' }));
 
 const recentRecords = [];
+const leadTargets = [
+  'schools',
+  'online course creators',
+  'supplement brands',
+  'ticket sellers',
+  'ecommerce stores',
+  'coaches'
+];
+const leads = [];
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -26,8 +35,11 @@ function shellLayout({ title, active, body }) {
     ['dashboard', '/', 'Dashboard'],
     ['records', '/records', 'Records'],
     ['create', '/records/new', 'Create Record'],
+    ['leads', '/leads', 'Leads'],
+    ['create-lead', '/leads/new', 'Create Lead'],
     ['api-keys', '/api-keys', 'API Keys'],
-    ['settings', '/settings', 'Settings']
+    ['settings', '/settings', 'Settings'],
+    ['docs', '/docs', 'Docs Portal']
   ];
 
   return `<!doctype html>
@@ -67,6 +79,134 @@ function shellLayout({ title, active, body }) {
   </div>
 </body>
 </html>`;
+}
+
+
+function docsPortalBody() {
+  const openApiSpec = `openapi: 3.1.0
+info:
+  title: QRV Issuer API
+  version: 1.0.0
+  description: API for issuing, verifying, revoking records and reading issuer metrics.
+servers:
+  - url: https://issuer.qrv.network
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    IssueRequest:
+      type: object
+      required: [recordType, title, subject, issuer, description]
+      properties:
+        recordType: { type: string }
+        title: { type: string }
+        subject: { type: string }
+        issuer: { type: string }
+        description: { type: string }
+        visibility: { type: string, enum: [public, private, restricted], default: public }
+    RevokeRequest:
+      type: object
+      required: [qrvid, reason]
+      properties:
+        qrvid: { type: string }
+        reason: { type: string }
+paths:
+  /issue:
+    post:
+      summary: Issue a new QRV credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssueRequest' }
+      responses:
+        '201':
+          description: Credential issued
+  /verify/{qrvid}:
+    get:
+      summary: Verify one credential
+      parameters:
+        - in: path
+          name: qrvid
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Verification result
+  /revoke:
+    post:
+      summary: Revoke a credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevokeRequest' }
+      responses:
+        '200':
+          description: Credential revoked
+  /issuer/stats:
+    get:
+      summary: Issuer metrics and counters
+      responses:
+        '200':
+          description: Current issuer stats`;
+
+  return `<div class="card stack">
+    <h1>QRV Developer Portal</h1>
+    <p class="muted">Production-ready reference for integrating with the issuer API.</p>
+    <h2>OpenAPI Specification</h2>
+    <p class="muted">Copy this baseline spec into your API tooling.</p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px;line-height:1.4">${escapeHtml(openApiSpec)}</pre>
+
+    <h2>Request/Response Examples</h2>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code">POST /issue</span></td><td><span class="code">{"recordType":"certificate","title":"KYC Complete","subject":"did:qrv:acme-user-42","issuer":"issuer.qrv.network","description":"Tier-2 KYC passed","visibility":"public"}</span></td></tr>
+        <tr><td><span class="code">GET /verify/:qrvid</span></td><td><span class="code">{"qrvid":"qrv_29A1X","status":"valid","revoked":false,"issuedAt":"2026-04-29T12:00:00.000Z"}</span></td></tr>
+        <tr><td><span class="code">POST /revoke</span></td><td><span class="code">{"qrvid":"qrv_29A1X","reason":"Subject requested revocation"}</span></td></tr>
+        <tr><td><span class="code">GET /issuer/stats</span></td><td><span class="code">{"issuedTotal":1284,"activeTotal":1219,"revokedTotal":65,"lastIssuedAt":"2026-04-29T11:58:00.000Z"}</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>SDK Docs</h2>
+    <p><strong>JavaScript (Node.js)</strong></p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px">import { QrvIssuerClient } from '@qrv/sdk';
+
+const client = new QrvIssuerClient({
+  baseUrl: 'https://issuer.qrv.network',
+  apiKey: process.env.QRV_API_KEY
+});
+
+const issued = await client.issue({
+  recordType: 'certificate',
+  title: 'KYC Complete',
+  subject: 'did:qrv:acme-user-42',
+  issuer: 'issuer.qrv.network',
+  description: 'Tier-2 KYC passed'
+});</pre>
+    <p><strong>Python</strong></p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px">from qrv_sdk import QrvIssuerClient
+
+client = QrvIssuerClient(base_url='https://issuer.qrv.network', api_key=QRV_API_KEY)
+resp = client.issue(record_type='certificate', title='KYC Complete', subject='did:qrv:acme-user-42', issuer='issuer.qrv.network', description='Tier-2 KYC passed')</pre>
+
+    <h2>Rate Limits</h2>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Limit</th><th>Burst</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code">POST /issue</span></td><td>60 requests/min per API key</td><td>15</td></tr>
+        <tr><td><span class="code">GET /verify/:qrvid</span></td><td>300 requests/min per API key</td><td>50</td></tr>
+        <tr><td><span class="code">POST /revoke</span></td><td>30 requests/min per API key</td><td>10</td></tr>
+        <tr><td><span class="code">GET /issuer/stats</span></td><td>120 requests/min per API key</td><td>20</td></tr>
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function recordForm(prefill = {}, error = '') {
@@ -169,15 +309,79 @@ function marketingLayout({ title, heading, eyebrow, description, nextStep }) {
   </div>
 </body>
 </html>`;
+function leadForm(prefill = {}, error = '') {
+  return `<div class="card">
+    <h1>Create Lead</h1>
+    <p class="muted">Track outbound CRM leads for priority target segments.</p>
+    ${error ? `<p class="bad"><strong>Error:</strong> ${escapeHtml(error)}</p>` : ''}
+    <form method="post" action="/leads/create" class="stack">
+      <div class="row">
+        <div>
+          <label for="target">Target</label>
+          <select id="target" name="target" required>
+            ${leadTargets.map((target) => `<option value="${escapeHtml(target)}" ${prefill.target === target ? 'selected' : ''}>${escapeHtml(target)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label for="stage">Stage</label>
+          <input id="stage" name="stage" required value="${escapeHtml(prefill.stage || 'new')}" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="company">Company</label>
+          <input id="company" name="company" required value="${escapeHtml(prefill.company || '')}" />
+        </div>
+        <div>
+          <label for="contact">Contact</label>
+          <input id="contact" name="contact" required value="${escapeHtml(prefill.contact || '')}" />
+        </div>
+      </div>
+      <div>
+        <label for="followupDate">Follow-up Date</label>
+        <input id="followupDate" name="followupDate" type="date" required value="${escapeHtml(prefill.followupDate || '')}" />
+      </div>
+      <div>
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes" rows="4">${escapeHtml(prefill.notes || '')}</textarea>
+      </div>
+      <div>
+        <button type="submit">Create Lead</button>
+      </div>
+    </form>
+  </div>`;
 }
 
 app.get('/', (_req, res) => {
+  const commandCenterPanels = [
+    { label: 'MRR', value: '$148,200', detail: '+12.4% vs. last month' },
+    { label: 'Trials', value: '372', detail: '61 converting this week' },
+    { label: 'Records issued', value: '84,113', detail: '4,906 in last 7 days' },
+    { label: 'Verifications today', value: '19,884', detail: 'Peak at 14:00 UTC' },
+    { label: 'Top issuers', value: 'Northstar, Apex, Bridge', detail: 'By verification volume' },
+    { label: 'Failed nodes', value: '2', detail: 'Frankfurt + São Paulo' },
+    { label: 'Pending leads', value: '43', detail: '9 marked enterprise priority' },
+    { label: 'Revenue forecast', value: '$1.92M', detail: 'Projected next 90 days' }
+  ];
+
+  const panels = commandCenterPanels
+    .map(
+      (panel) => `<section class="card" style="padding:18px">
+        <p class="muted" style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(panel.label)}</p>
+        <p style="margin:0;font-size:28px;font-weight:900;line-height:1.1">${escapeHtml(panel.value)}</p>
+        <p class="muted" style="margin:10px 0 0">${escapeHtml(panel.detail)}</p>
+      </section>`
+    )
+    .join('');
+
   const body = `<div class="card">
-    <h1>Issuer Dashboard</h1>
-    <p class="muted">Create and manage verifiable records from issuer.qrv.network.</p>
+    <h1>Gregory Founder Command Center</h1>
+    <p class="muted">Live founder snapshot across issuing, verification, pipeline, and revenue motion.</p>
     <p><a class="btn" href="/records/new">Create Record</a> <a class="btn secondary" href="/records">View Records</a></p>
-  </div>`;
-  res.type('html').send(shellLayout({ title: 'Issuer Dashboard', active: 'dashboard', body }));
+  </div>
+  <div class="row">${panels}</div>`;
+
+  res.type('html').send(shellLayout({ title: 'Gregory Founder Command Center', active: 'dashboard', body }));
 });
 
 app.get('/records', (_req, res) => {
@@ -208,6 +412,82 @@ app.get('/records', (_req, res) => {
 
 app.get('/records/new', (_req, res) => {
   res.type('html').send(shellLayout({ title: 'Create Record', active: 'create', body: recordForm() }));
+});
+
+app.get('/leads', (_req, res) => {
+  const rows = leads.length
+    ? leads
+        .map(
+          (lead) => `<tr>
+              <td>${escapeHtml(lead.company)}</td>
+              <td>${escapeHtml(lead.target)}</td>
+              <td>${escapeHtml(lead.contact)}</td>
+              <td>${escapeHtml(lead.stage)}</td>
+              <td>${escapeHtml(lead.followupDate)}</td>
+              <td>${escapeHtml(lead.notes || '—')}</td>
+            </tr>`
+        )
+        .join('')
+    : '<tr><td colspan="6" class="muted">No leads created in this server session yet.</td></tr>';
+
+  const body = `<div class="card">
+    <h1>Leads</h1>
+    <p class="muted">Manage sales pipeline leads for schools, creators, ecommerce brands, and more.</p>
+    <p><a class="btn" href="/leads/new">Create Lead</a></p>
+    <table>
+      <thead><tr><th>Company</th><th>Target</th><th>Contact</th><th>Stage</th><th>Follow-up</th><th>Notes</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+
+  res.type('html').send(shellLayout({ title: 'Leads', active: 'leads', body }));
+});
+
+app.get('/leads/new', (_req, res) => {
+  res.type('html').send(shellLayout({ title: 'Create Lead', active: 'create-lead', body: leadForm() }));
+});
+
+app.post('/leads/create', (req, res) => {
+  const payload = {
+    target: String(req.body.target || '').trim(),
+    company: String(req.body.company || '').trim(),
+    contact: String(req.body.contact || '').trim(),
+    stage: String(req.body.stage || '').trim(),
+    notes: String(req.body.notes || '').trim(),
+    followupDate: String(req.body.followupDate || '').trim()
+  };
+
+  const missing = ['target', 'company', 'contact', 'stage', 'followupDate'].filter((field) => !payload[field]);
+  if (missing.length) {
+    return res.status(400).type('html').send(
+      shellLayout({
+        title: 'Create Lead',
+        active: 'create-lead',
+        body: leadForm(payload, `Missing required fields: ${missing.join(', ')}`)
+      })
+    );
+  }
+
+  if (!leadTargets.includes(payload.target)) {
+    return res.status(400).type('html').send(
+      shellLayout({
+        title: 'Create Lead',
+        active: 'create-lead',
+        body: leadForm(payload, 'Invalid target selected.')
+      })
+    );
+  }
+
+  leads.unshift(payload);
+  if (leads.length > 250) leads.length = 250;
+
+  return res.type('html').send(
+    shellLayout({
+      title: 'Lead Created',
+      active: 'create-lead',
+      body: '<div class="card"><h1>Lead Created</h1><p class="ok"><strong>Success:</strong> Lead saved to CRM list.</p><p><a class="btn" href="/leads/new">Create Another Lead</a> <a class="btn secondary" href="/leads">Go to Leads</a></p></div>'
+    })
+  );
 });
 
 app.post('/records/create', async (req, res) => {
@@ -292,6 +572,12 @@ app.post('/records/create', async (req, res) => {
       })
     );
   }
+});
+
+
+app.get('/docs', (_req, res) => {
+  const body = docsPortalBody();
+  res.type('html').send(shellLayout({ title: 'Developer Portal', active: 'docs', body }));
 });
 
 app.get('/api-keys', (_req, res) => {
