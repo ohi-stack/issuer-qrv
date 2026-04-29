@@ -115,12 +115,35 @@ function recordForm(prefill = {}, error = '') {
 }
 
 app.get('/', (_req, res) => {
+  const commandCenterPanels = [
+    { label: 'MRR', value: '$148,200', detail: '+12.4% vs. last month' },
+    { label: 'Trials', value: '372', detail: '61 converting this week' },
+    { label: 'Records issued', value: '84,113', detail: '4,906 in last 7 days' },
+    { label: 'Verifications today', value: '19,884', detail: 'Peak at 14:00 UTC' },
+    { label: 'Top issuers', value: 'Northstar, Apex, Bridge', detail: 'By verification volume' },
+    { label: 'Failed nodes', value: '2', detail: 'Frankfurt + São Paulo' },
+    { label: 'Pending leads', value: '43', detail: '9 marked enterprise priority' },
+    { label: 'Revenue forecast', value: '$1.92M', detail: 'Projected next 90 days' }
+  ];
+
+  const panels = commandCenterPanels
+    .map(
+      (panel) => `<section class="card" style="padding:18px">
+        <p class="muted" style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(panel.label)}</p>
+        <p style="margin:0;font-size:28px;font-weight:900;line-height:1.1">${escapeHtml(panel.value)}</p>
+        <p class="muted" style="margin:10px 0 0">${escapeHtml(panel.detail)}</p>
+      </section>`
+    )
+    .join('');
+
   const body = `<div class="card">
-    <h1>Issuer Dashboard</h1>
-    <p class="muted">Create and manage verifiable records from issuer.qrv.network.</p>
+    <h1>Gregory Founder Command Center</h1>
+    <p class="muted">Live founder snapshot across issuing, verification, pipeline, and revenue motion.</p>
     <p><a class="btn" href="/records/new">Create Record</a> <a class="btn secondary" href="/records">View Records</a></p>
-  </div>`;
-  res.type('html').send(shellLayout({ title: 'Issuer Dashboard', active: 'dashboard', body }));
+  </div>
+  <div class="row">${panels}</div>`;
+
+  res.type('html').send(shellLayout({ title: 'Gregory Founder Command Center', active: 'dashboard', body }));
 });
 
 app.get('/records', (_req, res) => {
