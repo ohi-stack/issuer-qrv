@@ -247,16 +247,33 @@ app.get('/settings', (_req, res) => {
   res.type('html').send(shellLayout({ title: 'Settings', active: 'settings', body }));
 });
 
+function serviceStatusResponse() {
+  return {
+    status: 'ok',
+    service: 'qrv-api',
+    version: VERSION,
+    timestamp: new Date().toISOString()
+  };
+}
+
+app.get('/health', (_req, res) => {
+  res.status(200).json(serviceStatusResponse());
+});
+
+app.get('/ping', (_req, res) => {
+  res.status(200).json(serviceStatusResponse());
+});
+
+app.get('/version', (_req, res) => {
+  res.status(200).json(serviceStatusResponse());
+});
+
 app.get('/healthz', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
 app.get('/readyz', (_req, res) => {
   res.status(200).json({ status: 'ready' });
-});
-
-app.get('/version', (_req, res) => {
-  res.status(200).json({ version: VERSION });
 });
 
 app.listen(PORT, () => {
