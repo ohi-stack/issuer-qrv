@@ -16,6 +16,15 @@ const recentRecords = [];
 const monitorState = new Map(
   MONITORED_HOSTS.map((host) => [host, { checks: 0, failures: 0, lastOutageAt: null, lastResponseTimeMs: null, currentStatus: 'unknown' }])
 );
+const leadTargets = [
+  'schools',
+  'online course creators',
+  'supplement brands',
+  'ticket sellers',
+  'ecommerce stores',
+  'coaches'
+];
+const leads = [];
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -31,8 +40,11 @@ function shellLayout({ title, active, body }) {
     ['dashboard', '/', 'Dashboard'],
     ['records', '/records', 'Records'],
     ['create', '/records/new', 'Create Record'],
+    ['leads', '/leads', 'Leads'],
+    ['create-lead', '/leads/new', 'Create Lead'],
     ['api-keys', '/api-keys', 'API Keys'],
-    ['settings', '/settings', 'Settings']
+    ['settings', '/settings', 'Settings'],
+    ['docs', '/docs', 'Docs Portal']
   ];
 
   return `<!doctype html>
@@ -77,6 +89,134 @@ function shellLayout({ title, active, body }) {
   </div>
 </body>
 </html>`;
+}
+
+
+function docsPortalBody() {
+  const openApiSpec = `openapi: 3.1.0
+info:
+  title: QRV Issuer API
+  version: 1.0.0
+  description: API for issuing, verifying, revoking records and reading issuer metrics.
+servers:
+  - url: https://issuer.qrv.network
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    IssueRequest:
+      type: object
+      required: [recordType, title, subject, issuer, description]
+      properties:
+        recordType: { type: string }
+        title: { type: string }
+        subject: { type: string }
+        issuer: { type: string }
+        description: { type: string }
+        visibility: { type: string, enum: [public, private, restricted], default: public }
+    RevokeRequest:
+      type: object
+      required: [qrvid, reason]
+      properties:
+        qrvid: { type: string }
+        reason: { type: string }
+paths:
+  /issue:
+    post:
+      summary: Issue a new QRV credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssueRequest' }
+      responses:
+        '201':
+          description: Credential issued
+  /verify/{qrvid}:
+    get:
+      summary: Verify one credential
+      parameters:
+        - in: path
+          name: qrvid
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Verification result
+  /revoke:
+    post:
+      summary: Revoke a credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevokeRequest' }
+      responses:
+        '200':
+          description: Credential revoked
+  /issuer/stats:
+    get:
+      summary: Issuer metrics and counters
+      responses:
+        '200':
+          description: Current issuer stats`;
+
+  return `<div class="card stack">
+    <h1>QRV Developer Portal</h1>
+    <p class="muted">Production-ready reference for integrating with the issuer API.</p>
+    <h2>OpenAPI Specification</h2>
+    <p class="muted">Copy this baseline spec into your API tooling.</p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px;line-height:1.4">${escapeHtml(openApiSpec)}</pre>
+
+    <h2>Request/Response Examples</h2>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code">POST /issue</span></td><td><span class="code">{"recordType":"certificate","title":"KYC Complete","subject":"did:qrv:acme-user-42","issuer":"issuer.qrv.network","description":"Tier-2 KYC passed","visibility":"public"}</span></td></tr>
+        <tr><td><span class="code">GET /verify/:qrvid</span></td><td><span class="code">{"qrvid":"qrv_29A1X","status":"valid","revoked":false,"issuedAt":"2026-04-29T12:00:00.000Z"}</span></td></tr>
+        <tr><td><span class="code">POST /revoke</span></td><td><span class="code">{"qrvid":"qrv_29A1X","reason":"Subject requested revocation"}</span></td></tr>
+        <tr><td><span class="code">GET /issuer/stats</span></td><td><span class="code">{"issuedTotal":1284,"activeTotal":1219,"revokedTotal":65,"lastIssuedAt":"2026-04-29T11:58:00.000Z"}</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>SDK Docs</h2>
+    <p><strong>JavaScript (Node.js)</strong></p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px">import { QrvIssuerClient } from '@qrv/sdk';
+
+const client = new QrvIssuerClient({
+  baseUrl: 'https://issuer.qrv.network',
+  apiKey: process.env.QRV_API_KEY
+});
+
+const issued = await client.issue({
+  recordType: 'certificate',
+  title: 'KYC Complete',
+  subject: 'did:qrv:acme-user-42',
+  issuer: 'issuer.qrv.network',
+  description: 'Tier-2 KYC passed'
+});</pre>
+    <p><strong>Python</strong></p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px">from qrv_sdk import QrvIssuerClient
+
+client = QrvIssuerClient(base_url='https://issuer.qrv.network', api_key=QRV_API_KEY)
+resp = client.issue(record_type='certificate', title='KYC Complete', subject='did:qrv:acme-user-42', issuer='issuer.qrv.network', description='Tier-2 KYC passed')</pre>
+
+    <h2>Rate Limits</h2>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Limit</th><th>Burst</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code">POST /issue</span></td><td>60 requests/min per API key</td><td>15</td></tr>
+        <tr><td><span class="code">GET /verify/:qrvid</span></td><td>300 requests/min per API key</td><td>50</td></tr>
+        <tr><td><span class="code">POST /revoke</span></td><td>30 requests/min per API key</td><td>10</td></tr>
+        <tr><td><span class="code">GET /issuer/stats</span></td><td>120 requests/min per API key</td><td>20</td></tr>
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function recordForm(prefill = {}, error = '') {
@@ -166,9 +306,126 @@ async function checkHost(host) {
 
 function runMonitoringCycle() {
   return Promise.all(MONITORED_HOSTS.map((host) => checkHost(host)));
+function marketingLayout({ title, heading, eyebrow, description, nextStep }) {
+  const ctaLabel = 'Start Issuing Verified Records';
+  const ctaHref = '/book-demo';
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root{--bg:#040712;--panel:#0d1628;--line:#223653;--text:#eff7ff;--muted:#a5bad5;--accent:#40b7ff;--accent-2:#2962ff}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at 20% 0,#102645 0,#040712 46%,#02040c 100%);color:var(--text)}
+    .wrap{max-width:1080px;margin:0 auto;padding:24px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .brand{font-weight:900;font-size:22px;letter-spacing:-.02em}
+    .links{display:flex;gap:10px;flex-wrap:wrap}.links a{color:var(--muted);text-decoration:none;padding:8px 10px;border:1px solid transparent;border-radius:10px}
+    .links a:hover{color:#fff;border-color:rgba(64,183,255,.3);background:rgba(64,183,255,.1)}
+    .hero{margin-top:26px;background:rgba(13,22,40,.88);border:1px solid var(--line);border-radius:24px;padding:30px}
+    .eyebrow{color:#9ad8ff;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
+    h1{font-size:clamp(2rem,4vw,3rem);margin:8px 0}.muted{color:var(--muted)}
+    .cta{display:inline-flex;margin-top:18px;padding:13px 18px;border-radius:12px;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;text-decoration:none;font-weight:800}
+    .funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:24px}
+    .step{border:1px solid var(--line);background:rgba(6,13,24,.8);border-radius:14px;padding:14px}
+    .step b{display:block;font-size:12px;color:#8fb0cf;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+    @media(max-width:900px){.funnel{grid-template-columns:1fr 1fr}}@media(max-width:560px){.funnel{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">QR-V™</div>
+      <nav class="links">
+        <a href="/issuer">Issuer</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/use-cases">Use Cases</a>
+        <a href="/book-demo">Book Demo</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">${escapeHtml(eyebrow)}</div>
+      <h1>${escapeHtml(heading)}</h1>
+      <p class="muted">${escapeHtml(description)}</p>
+      <a class="cta" href="${ctaHref}">${ctaLabel}</a>
+      <div class="funnel">
+        <div class="step"><b>1. Discover</b>Visit <span class="muted">/issuer</span> and align record types to your workflow.</div>
+        <div class="step"><b>2. Evaluate</b>Review packages on <span class="muted">/pricing</span> and choose your rollout plan.</div>
+        <div class="step"><b>3. Validate</b>See industry flows on <span class="muted">/use-cases</span> and confirm fit.</div>
+        <div class="step"><b>4. Convert</b>Book on <span class="muted">/book-demo</span> then finalize via <span class="muted">/contact</span>.</div>
+      </div>
+      ${nextStep ? `<p style="margin-top:18px" class="muted"><strong>Next step:</strong> ${escapeHtml(nextStep)}</p>` : ''}
+    </section>
+  </div>
+</body>
+</html>`;
+function leadForm(prefill = {}, error = '') {
+  return `<div class="card">
+    <h1>Create Lead</h1>
+    <p class="muted">Track outbound CRM leads for priority target segments.</p>
+    ${error ? `<p class="bad"><strong>Error:</strong> ${escapeHtml(error)}</p>` : ''}
+    <form method="post" action="/leads/create" class="stack">
+      <div class="row">
+        <div>
+          <label for="target">Target</label>
+          <select id="target" name="target" required>
+            ${leadTargets.map((target) => `<option value="${escapeHtml(target)}" ${prefill.target === target ? 'selected' : ''}>${escapeHtml(target)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label for="stage">Stage</label>
+          <input id="stage" name="stage" required value="${escapeHtml(prefill.stage || 'new')}" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="company">Company</label>
+          <input id="company" name="company" required value="${escapeHtml(prefill.company || '')}" />
+        </div>
+        <div>
+          <label for="contact">Contact</label>
+          <input id="contact" name="contact" required value="${escapeHtml(prefill.contact || '')}" />
+        </div>
+      </div>
+      <div>
+        <label for="followupDate">Follow-up Date</label>
+        <input id="followupDate" name="followupDate" type="date" required value="${escapeHtml(prefill.followupDate || '')}" />
+      </div>
+      <div>
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes" rows="4">${escapeHtml(prefill.notes || '')}</textarea>
+      </div>
+      <div>
+        <button type="submit">Create Lead</button>
+      </div>
+    </form>
+  </div>`;
 }
 
 app.get('/', (_req, res) => {
+  const commandCenterPanels = [
+    { label: 'MRR', value: '$148,200', detail: '+12.4% vs. last month' },
+    { label: 'Trials', value: '372', detail: '61 converting this week' },
+    { label: 'Records issued', value: '84,113', detail: '4,906 in last 7 days' },
+    { label: 'Verifications today', value: '19,884', detail: 'Peak at 14:00 UTC' },
+    { label: 'Top issuers', value: 'Northstar, Apex, Bridge', detail: 'By verification volume' },
+    { label: 'Failed nodes', value: '2', detail: 'Frankfurt + São Paulo' },
+    { label: 'Pending leads', value: '43', detail: '9 marked enterprise priority' },
+    { label: 'Revenue forecast', value: '$1.92M', detail: 'Projected next 90 days' }
+  ];
+
+  const panels = commandCenterPanels
+    .map(
+      (panel) => `<section class="card" style="padding:18px">
+        <p class="muted" style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(panel.label)}</p>
+        <p style="margin:0;font-size:28px;font-weight:900;line-height:1.1">${escapeHtml(panel.value)}</p>
+        <p class="muted" style="margin:10px 0 0">${escapeHtml(panel.detail)}</p>
+      </section>`
+    )
+    .join('');
+
   const body = `<div class="card">
     <h1>QRV Uptime Dashboard</h1>
     <p class="muted">Live uptime summary for critical QRV services.</p>
@@ -186,6 +443,13 @@ app.get('/', (_req, res) => {
     </table>
   </div>`;
   res.type('html').send(shellLayout({ title: 'QRV Uptime Dashboard', active: 'dashboard', body }));
+    <h1>Gregory Founder Command Center</h1>
+    <p class="muted">Live founder snapshot across issuing, verification, pipeline, and revenue motion.</p>
+    <p><a class="btn" href="/records/new">Create Record</a> <a class="btn secondary" href="/records">View Records</a></p>
+  </div>
+  <div class="row">${panels}</div>`;
+
+  res.type('html').send(shellLayout({ title: 'Gregory Founder Command Center', active: 'dashboard', body }));
 });
 
 app.get('/records', (_req, res) => {
@@ -216,6 +480,82 @@ app.get('/records', (_req, res) => {
 
 app.get('/records/new', (_req, res) => {
   res.type('html').send(shellLayout({ title: 'Create Record', active: 'create', body: recordForm() }));
+});
+
+app.get('/leads', (_req, res) => {
+  const rows = leads.length
+    ? leads
+        .map(
+          (lead) => `<tr>
+              <td>${escapeHtml(lead.company)}</td>
+              <td>${escapeHtml(lead.target)}</td>
+              <td>${escapeHtml(lead.contact)}</td>
+              <td>${escapeHtml(lead.stage)}</td>
+              <td>${escapeHtml(lead.followupDate)}</td>
+              <td>${escapeHtml(lead.notes || '—')}</td>
+            </tr>`
+        )
+        .join('')
+    : '<tr><td colspan="6" class="muted">No leads created in this server session yet.</td></tr>';
+
+  const body = `<div class="card">
+    <h1>Leads</h1>
+    <p class="muted">Manage sales pipeline leads for schools, creators, ecommerce brands, and more.</p>
+    <p><a class="btn" href="/leads/new">Create Lead</a></p>
+    <table>
+      <thead><tr><th>Company</th><th>Target</th><th>Contact</th><th>Stage</th><th>Follow-up</th><th>Notes</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+
+  res.type('html').send(shellLayout({ title: 'Leads', active: 'leads', body }));
+});
+
+app.get('/leads/new', (_req, res) => {
+  res.type('html').send(shellLayout({ title: 'Create Lead', active: 'create-lead', body: leadForm() }));
+});
+
+app.post('/leads/create', (req, res) => {
+  const payload = {
+    target: String(req.body.target || '').trim(),
+    company: String(req.body.company || '').trim(),
+    contact: String(req.body.contact || '').trim(),
+    stage: String(req.body.stage || '').trim(),
+    notes: String(req.body.notes || '').trim(),
+    followupDate: String(req.body.followupDate || '').trim()
+  };
+
+  const missing = ['target', 'company', 'contact', 'stage', 'followupDate'].filter((field) => !payload[field]);
+  if (missing.length) {
+    return res.status(400).type('html').send(
+      shellLayout({
+        title: 'Create Lead',
+        active: 'create-lead',
+        body: leadForm(payload, `Missing required fields: ${missing.join(', ')}`)
+      })
+    );
+  }
+
+  if (!leadTargets.includes(payload.target)) {
+    return res.status(400).type('html').send(
+      shellLayout({
+        title: 'Create Lead',
+        active: 'create-lead',
+        body: leadForm(payload, 'Invalid target selected.')
+      })
+    );
+  }
+
+  leads.unshift(payload);
+  if (leads.length > 250) leads.length = 250;
+
+  return res.type('html').send(
+    shellLayout({
+      title: 'Lead Created',
+      active: 'create-lead',
+      body: '<div class="card"><h1>Lead Created</h1><p class="ok"><strong>Success:</strong> Lead saved to CRM list.</p><p><a class="btn" href="/leads/new">Create Another Lead</a> <a class="btn secondary" href="/leads">Go to Leads</a></p></div>'
+    })
+  );
 });
 
 app.post('/records/create', async (req, res) => {
@@ -302,6 +642,12 @@ app.post('/records/create', async (req, res) => {
   }
 });
 
+
+app.get('/docs', (_req, res) => {
+  const body = docsPortalBody();
+  res.type('html').send(shellLayout({ title: 'Developer Portal', active: 'docs', body }));
+});
+
 app.get('/api-keys', (_req, res) => {
   const body = `<div class="card"><h1>API Keys</h1><p class="muted">Issuer API key management will be surfaced here.</p></div>`;
   res.type('html').send(shellLayout({ title: 'API Keys', active: 'api-keys', body }));
@@ -310,6 +656,56 @@ app.get('/api-keys', (_req, res) => {
 app.get('/settings', (_req, res) => {
   const body = `<div class="card"><h1>Settings</h1><p class="muted">Issuer tenant and policy controls will appear here.</p></div>`;
   res.type('html').send(shellLayout({ title: 'Settings', active: 'settings', body }));
+});
+
+app.get('/issuer', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Issuer Platform | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Launch verified record issuance from a single issuer console.',
+    description: 'Create tamper-evident records, route verification to public endpoints, and onboard teams with policy-controlled issuance.',
+    nextStep: 'Compare plans on /pricing.'
+  }));
+});
+
+app.get('/pricing', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Pricing | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Choose the plan that fits your issuance volume.',
+    description: 'Start with pilot-ready pricing, then scale to high-volume verified record operations with support and automation.',
+    nextStep: 'Explore deployment examples on /use-cases.'
+  }));
+});
+
+app.get('/use-cases', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Use Cases | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Use verified records across education, workforce, and compliance.',
+    description: 'Show stakeholders how credentials, attestations, and compliance evidence can be issued and verified instantly.',
+    nextStep: 'Book a guided session on /book-demo.'
+  }));
+});
+
+app.get('/book-demo', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Book Demo | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Book a live demo tailored to your issuance workflow.',
+    description: 'Walk through provisioning, record issuance, and verifier experience with a QR-V specialist.',
+    nextStep: 'Send final requirements through /contact.'
+  }));
+});
+
+app.get('/contact', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Contact | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Talk with the team and start issuing verified records.',
+    description: 'Share your implementation timeline, required integrations, and compliance targets to receive a rollout plan.',
+    nextStep: 'Use the call-to-action above to start issuing verified records.'
+  }));
 });
 
 function serviceStatusResponse() {
