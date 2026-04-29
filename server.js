@@ -11,6 +11,15 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '1mb' }));
 
 const recentRecords = [];
+const leadTargets = [
+  'schools',
+  'online course creators',
+  'supplement brands',
+  'ticket sellers',
+  'ecommerce stores',
+  'coaches'
+];
+const leads = [];
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -26,6 +35,8 @@ function shellLayout({ title, active, body }) {
     ['dashboard', '/', 'Dashboard'],
     ['records', '/records', 'Records'],
     ['create', '/records/new', 'Create Record'],
+    ['leads', '/leads', 'Leads'],
+    ['create-lead', '/leads/new', 'Create Lead'],
     ['api-keys', '/api-keys', 'API Keys'],
     ['settings', '/settings', 'Settings']
   ];
@@ -114,6 +125,49 @@ function recordForm(prefill = {}, error = '') {
   </div>`;
 }
 
+function leadForm(prefill = {}, error = '') {
+  return `<div class="card">
+    <h1>Create Lead</h1>
+    <p class="muted">Track outbound CRM leads for priority target segments.</p>
+    ${error ? `<p class="bad"><strong>Error:</strong> ${escapeHtml(error)}</p>` : ''}
+    <form method="post" action="/leads/create" class="stack">
+      <div class="row">
+        <div>
+          <label for="target">Target</label>
+          <select id="target" name="target" required>
+            ${leadTargets.map((target) => `<option value="${escapeHtml(target)}" ${prefill.target === target ? 'selected' : ''}>${escapeHtml(target)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label for="stage">Stage</label>
+          <input id="stage" name="stage" required value="${escapeHtml(prefill.stage || 'new')}" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="company">Company</label>
+          <input id="company" name="company" required value="${escapeHtml(prefill.company || '')}" />
+        </div>
+        <div>
+          <label for="contact">Contact</label>
+          <input id="contact" name="contact" required value="${escapeHtml(prefill.contact || '')}" />
+        </div>
+      </div>
+      <div>
+        <label for="followupDate">Follow-up Date</label>
+        <input id="followupDate" name="followupDate" type="date" required value="${escapeHtml(prefill.followupDate || '')}" />
+      </div>
+      <div>
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes" rows="4">${escapeHtml(prefill.notes || '')}</textarea>
+      </div>
+      <div>
+        <button type="submit">Create Lead</button>
+      </div>
+    </form>
+  </div>`;
+}
+
 app.get('/', (_req, res) => {
   const body = `<div class="card">
     <h1>Issuer Dashboard</h1>
@@ -151,6 +205,82 @@ app.get('/records', (_req, res) => {
 
 app.get('/records/new', (_req, res) => {
   res.type('html').send(shellLayout({ title: 'Create Record', active: 'create', body: recordForm() }));
+});
+
+app.get('/leads', (_req, res) => {
+  const rows = leads.length
+    ? leads
+        .map(
+          (lead) => `<tr>
+              <td>${escapeHtml(lead.company)}</td>
+              <td>${escapeHtml(lead.target)}</td>
+              <td>${escapeHtml(lead.contact)}</td>
+              <td>${escapeHtml(lead.stage)}</td>
+              <td>${escapeHtml(lead.followupDate)}</td>
+              <td>${escapeHtml(lead.notes || '—')}</td>
+            </tr>`
+        )
+        .join('')
+    : '<tr><td colspan="6" class="muted">No leads created in this server session yet.</td></tr>';
+
+  const body = `<div class="card">
+    <h1>Leads</h1>
+    <p class="muted">Manage sales pipeline leads for schools, creators, ecommerce brands, and more.</p>
+    <p><a class="btn" href="/leads/new">Create Lead</a></p>
+    <table>
+      <thead><tr><th>Company</th><th>Target</th><th>Contact</th><th>Stage</th><th>Follow-up</th><th>Notes</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+
+  res.type('html').send(shellLayout({ title: 'Leads', active: 'leads', body }));
+});
+
+app.get('/leads/new', (_req, res) => {
+  res.type('html').send(shellLayout({ title: 'Create Lead', active: 'create-lead', body: leadForm() }));
+});
+
+app.post('/leads/create', (req, res) => {
+  const payload = {
+    target: String(req.body.target || '').trim(),
+    company: String(req.body.company || '').trim(),
+    contact: String(req.body.contact || '').trim(),
+    stage: String(req.body.stage || '').trim(),
+    notes: String(req.body.notes || '').trim(),
+    followupDate: String(req.body.followupDate || '').trim()
+  };
+
+  const missing = ['target', 'company', 'contact', 'stage', 'followupDate'].filter((field) => !payload[field]);
+  if (missing.length) {
+    return res.status(400).type('html').send(
+      shellLayout({
+        title: 'Create Lead',
+        active: 'create-lead',
+        body: leadForm(payload, `Missing required fields: ${missing.join(', ')}`)
+      })
+    );
+  }
+
+  if (!leadTargets.includes(payload.target)) {
+    return res.status(400).type('html').send(
+      shellLayout({
+        title: 'Create Lead',
+        active: 'create-lead',
+        body: leadForm(payload, 'Invalid target selected.')
+      })
+    );
+  }
+
+  leads.unshift(payload);
+  if (leads.length > 250) leads.length = 250;
+
+  return res.type('html').send(
+    shellLayout({
+      title: 'Lead Created',
+      active: 'create-lead',
+      body: '<div class="card"><h1>Lead Created</h1><p class="ok"><strong>Success:</strong> Lead saved to CRM list.</p><p><a class="btn" href="/leads/new">Create Another Lead</a> <a class="btn secondary" href="/leads">Go to Leads</a></p></div>'
+    })
+  );
 });
 
 app.post('/records/create', async (req, res) => {
