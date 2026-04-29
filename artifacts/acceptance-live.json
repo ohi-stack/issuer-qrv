@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-04-29T14:43:18.103Z",
+  "baseUrl": "https://verify.qrv.network",
+  "config": {
+    "baseDelayMs": 1500,
+    "jitterMs": {
+      "min": 1000,
+      "max": 2500
+    },
+    "retry429Max": 3,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  "summary": {
+    "totalNodes": 4,
+    "okNodes": 0,
+    "criticalFailures": 4,
+    "passed": false
+  },
+  "results": [
+    {
+      "path": "/",
+      "url": "https://verify.qrv.network/",
+      "status": null,
+      "ok": false,
+      "retriesUsed": 0,
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-04-29T14:43:08.711Z",
+          "error": "fetch failed"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "path": "/verify/QRV-DEMO-001",
+      "url": "https://verify.qrv.network/verify/QRV-DEMO-001",
+      "status": null,
+      "ok": false,
+      "retriesUsed": 0,
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-04-29T14:43:12.782Z",
+          "error": "fetch failed"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "path": "/help",
+      "url": "https://verify.qrv.network/help",
+      "status": null,
+      "ok": false,
+      "retriesUsed": 0,
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-04-29T14:43:15.416Z",
+          "error": "fetch failed"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "path": "/scan",
+      "url": "https://verify.qrv.network/scan",
+      "status": null,
+      "ok": false,
+      "retriesUsed": 0,
+      "attempts": [
+        {
+          "attempt": 1,
+          "startedAt": "2026-04-29T14:43:18.039Z",
+          "error": "fetch failed"
+        }
+      ],
+      "critical": true
+    }
+  ]
+}
