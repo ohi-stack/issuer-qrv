@@ -69,7 +69,6 @@ const STRIPE_PRICE_IDS = {
 };
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
-app.disable('x-powered-by');
 app.use('/billing/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '1mb' }));
@@ -550,9 +549,20 @@ async function checkHost(host) {
 
 function runMonitoringCycle() {
   return Promise.all(MONITORED_HOSTS.map((host) => checkHost(host)));
+}
+
 function marketingLayout({ title, heading, eyebrow, description, nextStep }) {
   const ctaLabel = 'Start Issuing Verified Records';
   const ctaHref = '/book-demo';
+  const body = `
+    <div class="hero">
+      <div class="eyebrow">${escapeHtml(eyebrow)}</div>
+      <h1>${escapeHtml(heading)}</h1>
+      <p class="muted">${escapeHtml(description)}</p>
+      <a class="cta" href="${ctaHref}">${ctaLabel}</a>
+      ${nextStep ? `<p class="muted"><strong>Next step:</strong> ${escapeHtml(nextStep)}</p>` : ''}
+    </div>
+  `;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -575,51 +585,7 @@ function marketingLayout({ title, heading, eyebrow, description, nextStep }) {
   <main class="wrap">${body}</main>
 </body>
 </html>`;
-    :root{--bg:#040712;--panel:#0d1628;--line:#223653;--text:#eff7ff;--muted:#a5bad5;--accent:#40b7ff;--accent-2:#2962ff}
-    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at 20% 0,#102645 0,#040712 46%,#02040c 100%);color:var(--text)}
-    .wrap{max-width:1080px;margin:0 auto;padding:24px}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-    .brand{font-weight:900;font-size:22px;letter-spacing:-.02em}
-    .links{display:flex;gap:10px;flex-wrap:wrap}.links a{color:var(--muted);text-decoration:none;padding:8px 10px;border:1px solid transparent;border-radius:10px}
-    .links a:hover{color:#fff;border-color:rgba(64,183,255,.3);background:rgba(64,183,255,.1)}
-    .hero{margin-top:26px;background:rgba(13,22,40,.88);border:1px solid var(--line);border-radius:24px;padding:30px}
-    .eyebrow{color:#9ad8ff;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
-    h1{font-size:clamp(2rem,4vw,3rem);margin:8px 0}.muted{color:var(--muted)}
-    .cta{display:inline-flex;margin-top:18px;padding:13px 18px;border-radius:12px;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;text-decoration:none;font-weight:800}
-    .funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:24px}
-    .step{border:1px solid var(--line);background:rgba(6,13,24,.8);border-radius:14px;padding:14px}
-    .step b{display:block;font-size:12px;color:#8fb0cf;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
-    @media(max-width:900px){.funnel{grid-template-columns:1fr 1fr}}@media(max-width:560px){.funnel{grid-template-columns:1fr}}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <header class="top">
-      <div class="brand">QR-V™</div>
-      <nav class="links">
-        <a href="/issuer">Issuer</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/use-cases">Use Cases</a>
-        <a href="/book-demo">Book Demo</a>
-        <a href="/contact">Contact</a>
-      </nav>
-    </header>
-    <section class="hero">
-      <div class="eyebrow">${escapeHtml(eyebrow)}</div>
-      <h1>${escapeHtml(heading)}</h1>
-      <p class="muted">${escapeHtml(description)}</p>
-      <a class="cta" href="${ctaHref}">${ctaLabel}</a>
-      <div class="funnel">
-        <div class="step"><b>1. Discover</b>Visit <span class="muted">/issuer</span> and align record types to your workflow.</div>
-        <div class="step"><b>2. Evaluate</b>Review packages on <span class="muted">/pricing</span> and choose your rollout plan.</div>
-        <div class="step"><b>3. Validate</b>See industry flows on <span class="muted">/use-cases</span> and confirm fit.</div>
-        <div class="step"><b>4. Convert</b>Book on <span class="muted">/book-demo</span> then finalize via <span class="muted">/contact</span>.</div>
-      </div>
-      ${nextStep ? `<p style="margin-top:18px" class="muted"><strong>Next step:</strong> ${escapeHtml(nextStep)}</p>` : ''}
-    </section>
-  </div>
-</body>
-</html>`;
+}
 function leadForm(prefill = {}, error = '') {
   return `<div class="card">
     <h1>Create Lead</h1>

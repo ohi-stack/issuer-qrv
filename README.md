@@ -60,3 +60,5 @@ Use the **Express** preset.
 npm install
 npm run dev
 ```
+
+- Go-live execution plan: `docs/qrv-go-live-build-plan.md`
