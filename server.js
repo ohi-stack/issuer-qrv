@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const express = require('express');
+const Stripe = require('stripe');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -6,11 +8,59 @@ const VERSION = process.env.APP_VERSION || process.env.npm_package_version || '1
 const REGISTRY_BASE_URL = (process.env.REGISTRY_BASE_URL || 'https://registry.qrv.network').replace(/\/$/, '');
 const ISSUER_NAME = process.env.ISSUER_NAME || 'issuer.qrv.network';
 
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_SUCCESS_URL = process.env.STRIPE_SUCCESS_URL || 'https://issuer.qrv.network/billing/success?session_id={CHECKOUT_SESSION_ID}';
+const STRIPE_CANCEL_URL = process.env.STRIPE_CANCEL_URL || 'https://issuer.qrv.network/billing/cancel';
+const STRIPE_PRICE_IDS = {
+  starter: process.env.STRIPE_PRICE_STARTER || '',
+  growth: process.env.STRIPE_PRICE_GROWTH || ''
+};
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
 app.disable('x-powered-by');
+app.use('/billing/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '1mb' }));
 
 const recentRecords = [];
+const billingState = new Map();
+const usageState = new Map();
+
+
+function upsertSubscriptionFromStripe(subscription) {
+  if (!subscription) return;
+  const customerId = subscription.customer;
+  if (!customerId) return;
+  const planPriceId = subscription.items?.data?.[0]?.price?.id || null;
+  const plan =
+    Object.entries(STRIPE_PRICE_IDS).find(([, priceId]) => priceId && priceId === planPriceId)?.[0] ||
+    (planPriceId ? 'enterprise' : 'unknown');
+
+  billingState.set(String(customerId), {
+    customerId: String(customerId),
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    plan,
+    planPriceId,
+    currentPeriodEnd: subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
+      : null,
+    cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function requireStripe(req, res, next) {
+  if (!stripe) {
+    return res.status(500).json({
+      error: 'stripe_not_configured',
+      message: 'Set STRIPE_SECRET_KEY to enable billing endpoints.'
+    });
+  }
+
+  return next();
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -245,6 +295,101 @@ app.get('/api-keys', (_req, res) => {
 app.get('/settings', (_req, res) => {
   const body = `<div class="card"><h1>Settings</h1><p class="muted">Issuer tenant and policy controls will appear here.</p></div>`;
   res.type('html').send(shellLayout({ title: 'Settings', active: 'settings', body }));
+});
+
+
+app.post('/billing/checkout', requireStripe, async (req, res) => {
+  const plan = String(req.body.plan || '').trim().toLowerCase();
+  const customerId = String(req.body.customerId || '').trim();
+  const email = String(req.body.email || '').trim();
+
+  if (!['starter', 'growth'].includes(plan)) {
+    return res.status(400).json({ error: 'invalid_plan', message: 'Allowed plans: starter, growth. Enterprise is custom.' });
+  }
+
+  const price = STRIPE_PRICE_IDS[plan];
+  if (!price) {
+    return res.status(400).json({ error: 'price_not_configured', message: `Missing Stripe price ID for plan ${plan}.` });
+  }
+
+  if (!customerId && !email) {
+    return res.status(400).json({ error: 'missing_customer', message: 'Provide customerId or email.' });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    line_items: [{ price, quantity: 1 }],
+    success_url: STRIPE_SUCCESS_URL,
+    cancel_url: STRIPE_CANCEL_URL,
+    customer: customerId || undefined,
+    customer_email: customerId ? undefined : email,
+    metadata: { plan }
+  });
+
+  return res.status(200).json({ checkoutUrl: session.url, sessionId: session.id });
+});
+
+app.post('/billing/webhooks/stripe', requireStripe, async (req, res) => {
+  if (!STRIPE_WEBHOOK_SECRET) return res.status(500).json({ error: 'webhook_secret_not_configured' });
+
+  let event;
+  try {
+    const signature = req.headers['stripe-signature'];
+    event = stripe.webhooks.constructEvent(req.body, signature, STRIPE_WEBHOOK_SECRET);
+  } catch (error) {
+    return res.status(400).json({ error: 'invalid_signature', message: error.message });
+  }
+
+  if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+    upsertSubscriptionFromStripe(event.data.object);
+  }
+
+  if (event.type === 'invoice.paid') {
+    const invoice = event.data.object;
+    const customerId = String(invoice.customer || '');
+    if (customerId) {
+      const previous = usageState.get(customerId) || { units: 0, events: [] };
+      usageState.set(customerId, {
+        units: previous.units,
+        events: [{ at: new Date().toISOString(), kind: 'invoice_paid', invoiceId: invoice.id }, ...previous.events].slice(0, 20)
+      });
+    }
+  }
+
+  return res.status(200).json({ received: true, eventId: event.id });
+});
+
+app.get('/billing/subscription-status/:customerId', requireStripe, async (req, res) => {
+  const customerId = String(req.params.customerId || '').trim();
+  if (!customerId) return res.status(400).json({ error: 'missing_customer' });
+
+  if (!billingState.has(customerId)) {
+    const subscriptions = await stripe.subscriptions.list({ customer: customerId, limit: 1, status: 'all' });
+    if (subscriptions.data[0]) upsertSubscriptionFromStripe(subscriptions.data[0]);
+  }
+
+  const subscription = billingState.get(customerId);
+  if (!subscription) return res.status(404).json({ error: 'subscription_not_found' });
+
+  return res.status(200).json(subscription);
+});
+
+app.post('/billing/usage/:customerId', requireStripe, async (req, res) => {
+  const customerId = String(req.params.customerId || '').trim();
+  const units = Number(req.body.units || 0);
+  const idempotencyKey = String(req.body.idempotencyKey || crypto.randomUUID());
+
+  if (!customerId) return res.status(400).json({ error: 'missing_customer' });
+  if (!Number.isFinite(units) || units <= 0) return res.status(400).json({ error: 'invalid_units' });
+
+  const previous = usageState.get(customerId) || { units: 0, events: [] };
+  const next = {
+    units: previous.units + units,
+    events: [{ at: new Date().toISOString(), kind: 'usage_recorded', units, idempotencyKey }, ...previous.events].slice(0, 100)
+  };
+  usageState.set(customerId, next);
+
+  return res.status(200).json({ customerId, totalUnits: next.units, recordedUnits: units, idempotencyKey });
 });
 
 function serviceStatusResponse() {
