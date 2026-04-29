@@ -38,7 +38,8 @@ function shellLayout({ title, active, body }) {
     ['leads', '/leads', 'Leads'],
     ['create-lead', '/leads/new', 'Create Lead'],
     ['api-keys', '/api-keys', 'API Keys'],
-    ['settings', '/settings', 'Settings']
+    ['settings', '/settings', 'Settings'],
+    ['docs', '/docs', 'Docs Portal']
   ];
 
   return `<!doctype html>
@@ -78,6 +79,134 @@ function shellLayout({ title, active, body }) {
   </div>
 </body>
 </html>`;
+}
+
+
+function docsPortalBody() {
+  const openApiSpec = `openapi: 3.1.0
+info:
+  title: QRV Issuer API
+  version: 1.0.0
+  description: API for issuing, verifying, revoking records and reading issuer metrics.
+servers:
+  - url: https://issuer.qrv.network
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    IssueRequest:
+      type: object
+      required: [recordType, title, subject, issuer, description]
+      properties:
+        recordType: { type: string }
+        title: { type: string }
+        subject: { type: string }
+        issuer: { type: string }
+        description: { type: string }
+        visibility: { type: string, enum: [public, private, restricted], default: public }
+    RevokeRequest:
+      type: object
+      required: [qrvid, reason]
+      properties:
+        qrvid: { type: string }
+        reason: { type: string }
+paths:
+  /issue:
+    post:
+      summary: Issue a new QRV credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssueRequest' }
+      responses:
+        '201':
+          description: Credential issued
+  /verify/{qrvid}:
+    get:
+      summary: Verify one credential
+      parameters:
+        - in: path
+          name: qrvid
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Verification result
+  /revoke:
+    post:
+      summary: Revoke a credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevokeRequest' }
+      responses:
+        '200':
+          description: Credential revoked
+  /issuer/stats:
+    get:
+      summary: Issuer metrics and counters
+      responses:
+        '200':
+          description: Current issuer stats`;
+
+  return `<div class="card stack">
+    <h1>QRV Developer Portal</h1>
+    <p class="muted">Production-ready reference for integrating with the issuer API.</p>
+    <h2>OpenAPI Specification</h2>
+    <p class="muted">Copy this baseline spec into your API tooling.</p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px;line-height:1.4">${escapeHtml(openApiSpec)}</pre>
+
+    <h2>Request/Response Examples</h2>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code">POST /issue</span></td><td><span class="code">{"recordType":"certificate","title":"KYC Complete","subject":"did:qrv:acme-user-42","issuer":"issuer.qrv.network","description":"Tier-2 KYC passed","visibility":"public"}</span></td></tr>
+        <tr><td><span class="code">GET /verify/:qrvid</span></td><td><span class="code">{"qrvid":"qrv_29A1X","status":"valid","revoked":false,"issuedAt":"2026-04-29T12:00:00.000Z"}</span></td></tr>
+        <tr><td><span class="code">POST /revoke</span></td><td><span class="code">{"qrvid":"qrv_29A1X","reason":"Subject requested revocation"}</span></td></tr>
+        <tr><td><span class="code">GET /issuer/stats</span></td><td><span class="code">{"issuedTotal":1284,"activeTotal":1219,"revokedTotal":65,"lastIssuedAt":"2026-04-29T11:58:00.000Z"}</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>SDK Docs</h2>
+    <p><strong>JavaScript (Node.js)</strong></p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px">import { QrvIssuerClient } from '@qrv/sdk';
+
+const client = new QrvIssuerClient({
+  baseUrl: 'https://issuer.qrv.network',
+  apiKey: process.env.QRV_API_KEY
+});
+
+const issued = await client.issue({
+  recordType: 'certificate',
+  title: 'KYC Complete',
+  subject: 'did:qrv:acme-user-42',
+  issuer: 'issuer.qrv.network',
+  description: 'Tier-2 KYC passed'
+});</pre>
+    <p><strong>Python</strong></p>
+    <pre class="code" style="display:block;white-space:pre-wrap;padding:14px">from qrv_sdk import QrvIssuerClient
+
+client = QrvIssuerClient(base_url='https://issuer.qrv.network', api_key=QRV_API_KEY)
+resp = client.issue(record_type='certificate', title='KYC Complete', subject='did:qrv:acme-user-42', issuer='issuer.qrv.network', description='Tier-2 KYC passed')</pre>
+
+    <h2>Rate Limits</h2>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Limit</th><th>Burst</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code">POST /issue</span></td><td>60 requests/min per API key</td><td>15</td></tr>
+        <tr><td><span class="code">GET /verify/:qrvid</span></td><td>300 requests/min per API key</td><td>50</td></tr>
+        <tr><td><span class="code">POST /revoke</span></td><td>30 requests/min per API key</td><td>10</td></tr>
+        <tr><td><span class="code">GET /issuer/stats</span></td><td>120 requests/min per API key</td><td>20</td></tr>
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function recordForm(prefill = {}, error = '') {
@@ -388,6 +517,12 @@ app.post('/records/create', async (req, res) => {
       })
     );
   }
+});
+
+
+app.get('/docs', (_req, res) => {
+  const body = docsPortalBody();
+  res.type('html').send(shellLayout({ title: 'Developer Portal', active: 'docs', body }));
 });
 
 app.get('/api-keys', (_req, res) => {
