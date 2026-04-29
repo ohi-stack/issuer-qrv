@@ -114,6 +114,63 @@ function recordForm(prefill = {}, error = '') {
   </div>`;
 }
 
+function marketingLayout({ title, heading, eyebrow, description, nextStep }) {
+  const ctaLabel = 'Start Issuing Verified Records';
+  const ctaHref = '/book-demo';
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root{--bg:#040712;--panel:#0d1628;--line:#223653;--text:#eff7ff;--muted:#a5bad5;--accent:#40b7ff;--accent-2:#2962ff}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at 20% 0,#102645 0,#040712 46%,#02040c 100%);color:var(--text)}
+    .wrap{max-width:1080px;margin:0 auto;padding:24px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .brand{font-weight:900;font-size:22px;letter-spacing:-.02em}
+    .links{display:flex;gap:10px;flex-wrap:wrap}.links a{color:var(--muted);text-decoration:none;padding:8px 10px;border:1px solid transparent;border-radius:10px}
+    .links a:hover{color:#fff;border-color:rgba(64,183,255,.3);background:rgba(64,183,255,.1)}
+    .hero{margin-top:26px;background:rgba(13,22,40,.88);border:1px solid var(--line);border-radius:24px;padding:30px}
+    .eyebrow{color:#9ad8ff;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
+    h1{font-size:clamp(2rem,4vw,3rem);margin:8px 0}.muted{color:var(--muted)}
+    .cta{display:inline-flex;margin-top:18px;padding:13px 18px;border-radius:12px;background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;text-decoration:none;font-weight:800}
+    .funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:24px}
+    .step{border:1px solid var(--line);background:rgba(6,13,24,.8);border-radius:14px;padding:14px}
+    .step b{display:block;font-size:12px;color:#8fb0cf;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+    @media(max-width:900px){.funnel{grid-template-columns:1fr 1fr}}@media(max-width:560px){.funnel{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">QR-V™</div>
+      <nav class="links">
+        <a href="/issuer">Issuer</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/use-cases">Use Cases</a>
+        <a href="/book-demo">Book Demo</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">${escapeHtml(eyebrow)}</div>
+      <h1>${escapeHtml(heading)}</h1>
+      <p class="muted">${escapeHtml(description)}</p>
+      <a class="cta" href="${ctaHref}">${ctaLabel}</a>
+      <div class="funnel">
+        <div class="step"><b>1. Discover</b>Visit <span class="muted">/issuer</span> and align record types to your workflow.</div>
+        <div class="step"><b>2. Evaluate</b>Review packages on <span class="muted">/pricing</span> and choose your rollout plan.</div>
+        <div class="step"><b>3. Validate</b>See industry flows on <span class="muted">/use-cases</span> and confirm fit.</div>
+        <div class="step"><b>4. Convert</b>Book on <span class="muted">/book-demo</span> then finalize via <span class="muted">/contact</span>.</div>
+      </div>
+      ${nextStep ? `<p style="margin-top:18px" class="muted"><strong>Next step:</strong> ${escapeHtml(nextStep)}</p>` : ''}
+    </section>
+  </div>
+</body>
+</html>`;
+}
+
 app.get('/', (_req, res) => {
   const body = `<div class="card">
     <h1>Issuer Dashboard</h1>
@@ -245,6 +302,56 @@ app.get('/api-keys', (_req, res) => {
 app.get('/settings', (_req, res) => {
   const body = `<div class="card"><h1>Settings</h1><p class="muted">Issuer tenant and policy controls will appear here.</p></div>`;
   res.type('html').send(shellLayout({ title: 'Settings', active: 'settings', body }));
+});
+
+app.get('/issuer', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Issuer Platform | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Launch verified record issuance from a single issuer console.',
+    description: 'Create tamper-evident records, route verification to public endpoints, and onboard teams with policy-controlled issuance.',
+    nextStep: 'Compare plans on /pricing.'
+  }));
+});
+
+app.get('/pricing', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Pricing | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Choose the plan that fits your issuance volume.',
+    description: 'Start with pilot-ready pricing, then scale to high-volume verified record operations with support and automation.',
+    nextStep: 'Explore deployment examples on /use-cases.'
+  }));
+});
+
+app.get('/use-cases', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Use Cases | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Use verified records across education, workforce, and compliance.',
+    description: 'Show stakeholders how credentials, attestations, and compliance evidence can be issued and verified instantly.',
+    nextStep: 'Book a guided session on /book-demo.'
+  }));
+});
+
+app.get('/book-demo', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Book Demo | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Book a live demo tailored to your issuance workflow.',
+    description: 'Walk through provisioning, record issuance, and verifier experience with a QR-V specialist.',
+    nextStep: 'Send final requirements through /contact.'
+  }));
+});
+
+app.get('/contact', (_req, res) => {
+  res.type('html').send(marketingLayout({
+    title: 'Contact | QR-V',
+    eyebrow: 'Conversion Funnel',
+    heading: 'Talk with the team and start issuing verified records.',
+    description: 'Share your implementation timeline, required integrations, and compliance targets to receive a rollout plan.',
+    nextStep: 'Use the call-to-action above to start issuing verified records.'
+  }));
 });
 
 function serviceStatusResponse() {
