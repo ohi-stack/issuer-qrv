@@ -5,8 +5,6 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const Joi = require('joi');
-const crypto = require('crypto');
-const express = require('express');
 const Stripe = require('stripe');
 
 const app = express();
@@ -221,7 +219,7 @@ function shellLayout({ title, active, body, userEmail }) {
     ['records', '/records', 'My Records'],
     ['billing', '/billing', 'Billing'],
     ['api-keys', '/api-keys', 'API Keys'],
-    ['settings', '/settings', 'Account Settings']
+    ['settings', '/settings', 'Account Settings'],
     ['leads', '/leads', 'Leads'],
     ['create-lead', '/leads/new', 'Create Lead'],
     ['api-keys', '/api-keys', 'API Keys'],
