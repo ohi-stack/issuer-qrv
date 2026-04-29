@@ -1,14 +1,62 @@
+require('dotenv').config();
 const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const Joi = require('joi');
 
 const app = express();
+const isProduction = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT || 3000);
 const VERSION = process.env.APP_VERSION || process.env.npm_package_version || '1.0.0';
 const REGISTRY_BASE_URL = (process.env.REGISTRY_BASE_URL || 'https://registry.qrv.network').replace(/\/$/, '');
 const ISSUER_NAME = process.env.ISSUER_NAME || 'issuer.qrv.network';
+const CORS_ALLOWLIST = (process.env.CORS_ALLOWLIST || process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const createRecordSchema = Joi.object({
+  recordType: Joi.string().trim().max(120).required(),
+  title: Joi.string().trim().max(300).required(),
+  subject: Joi.string().trim().max(200).required(),
+  issuer: Joi.string().trim().max(200).required(),
+  description: Joi.string().trim().max(5000).required(),
+  visibility: Joi.string().trim().valid('public', 'private', 'restricted').required()
+});
+
+function hasSqlInjectionPattern(value) {
+  const serialized = JSON.stringify(value).toLowerCase();
+  return /(\bor\b|\band\b)\s+['"`]?\d+['"`]?\s*=\s*['"`]?\d+|union\s+select|drop\s+table|--|\/\*|\*\//i.test(serialized);
+}
 
 app.disable('x-powered-by');
+app.use(helmet());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (CORS_ALLOWLIST.includes(origin)) return callback(null, true);
+      return callback(new Error('Origin not allowed by CORS'));
+    }
+  })
+);
+app.use(
+  rateLimit({
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+    limit: Number(process.env.RATE_LIMIT_MAX || 200),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false
+  })
+);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  if (hasSqlInjectionPattern(req.body) || hasSqlInjectionPattern(req.query) || hasSqlInjectionPattern(req.params)) {
+    return res.status(400).json({ error: 'Invalid input detected.' });
+  }
+  return next();
+});
 
 const recentRecords = [];
 
@@ -163,11 +211,9 @@ app.post('/records/create', async (req, res) => {
     visibility: String(req.body.visibility || '').trim()
   };
 
-  const missing = Object.entries(payload)
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
-
-  if (missing.length) {
+  const { error } = createRecordSchema.validate(payload, { abortEarly: false });
+  if (error) {
+    const missing = error.details.map((detail) => detail.path.join('.'));
     return res.status(400).type('html').send(
       shellLayout({
         title: 'Create Record',
@@ -274,6 +320,18 @@ app.get('/healthz', (_req, res) => {
 
 app.get('/readyz', (_req, res) => {
   res.status(200).json({ status: 'ready' });
+});
+
+app.use((err, _req, res, _next) => {
+  const status = err.status || 500;
+  const message = status === 500 ? 'Internal Server Error' : err.message;
+  const response = { error: message };
+
+  if (!isProduction) {
+    response.stack = err.stack;
+  }
+
+  res.status(status).json(response);
 });
 
 app.listen(PORT, () => {
