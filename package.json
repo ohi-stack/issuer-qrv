@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "check": "node --check server.js",
     "build": "next build",
     "dev": "next dev",
     "acceptance:live": "node scripts/acceptance-live.mjs"
@@ -22,7 +23,7 @@
     "stripe": "^18.0.0"
   },
   "engines": {
-    "node": "22.x",
+    "node": "20.x",
     "npm": "10.x"
   },
   "devDependencies": {
