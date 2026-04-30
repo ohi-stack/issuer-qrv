@@ -2,6 +2,15 @@
 
 > Replace `BASE_URL` with the deployed host and `ISSUER_TOKEN` with a valid issuer credential.
 
+## 0) Domain ownership/content-type smoke test
+```bash
+npm run smoke:domains
+```
+
+Expected:
+- `api.qrv.network` and `registry.qrv.network` respond with `Content-Type: application/json...`
+- `issuer.qrv.network` and `verify.qrv.network` respond with `Content-Type: text/html...`
+
 ## 1) Health
 ```bash
 curl -sS "$BASE_URL/health"
