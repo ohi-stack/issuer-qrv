@@ -1,13 +1,14 @@
 {
-  "name": "qrv-verify",
-  "version": "1.0.0",
+  "name": "issuer-qrv",
+  "version": "1.1.0",
   "private": true,
+  "description": "QR-V issuer portal and certificate issuance control plane.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js",
-    "build": "next build",
-    "dev": "next dev",
+    "build": "echo Build complete",
+    "dev": "NODE_ENV=development node server.js",
     "acceptance:live": "node scripts/acceptance-live.mjs",
     "smoke:domains": "node scripts/smoke-domain-content-type.mjs"
   },
@@ -18,17 +19,9 @@
     "express-rate-limit": "^7.5.1",
     "helmet": "^8.1.0",
     "joi": "^17.13.3",
-    "next": "^16.0.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "stripe": "^18.0.0"
   },
   "engines": {
-    "node": "20.x",
-    "npm": "10.x"
-  },
-  "devDependencies": {
-    "@types/react": "19.2.14",
-    "typescript": "6.0.3"
+    "node": ">=20"
   }
 }
