@@ -41,3 +41,27 @@ curl -sS -X POST "$BASE_URL/api/v1/revoke" \
 ```bash
 curl -sS "$BASE_URL/api/v1/verify/QRV-PROD-CERT-000001"
 ```
+
+## Production root hub and service-domain smoke checks
+
+Run the production smoke script after Hostinger deployment:
+
+```bash
+npm run smoke:production
+```
+
+Default targets:
+
+- `https://qrv.network`
+- `https://qrv.network/status`
+- `https://api.qrv.network/healthz`
+- `https://verify.qrv.network/QRV-DEMO-001`
+- `https://issuer.qrv.network/login`
+
+Optional environment overrides:
+
+- `QRV_ROOT_URL`
+- `QRV_STATUS_PAGE_URL`
+- `QRV_API_HEALTHZ_URL`
+- `QRV_VERIFY_DEMO_URL`
+- `QRV_ISSUER_LOGIN_URL`
