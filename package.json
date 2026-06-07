@@ -11,7 +11,8 @@
     "dev": "NODE_ENV=development node server.js",
     "acceptance:live": "node scripts/acceptance-live.mjs",
     "smoke:domains": "node scripts/smoke-domain-content-type.mjs",
-    "smoke:production": "node scripts/smoke-production.mjs"
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "audit:live": "node scripts/audit-live-domains.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
