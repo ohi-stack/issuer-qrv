@@ -1,8 +1,8 @@
 {
-  "name": "issuer-qrv",
-  "version": "1.1.0",
+  "name": "qrv-marketing-site",
+  "version": "1.2.0",
   "private": true,
-  "description": "QR-V issuer portal and certificate issuance control plane.",
+  "description": "Production qrv.network root marketing site with QRVID verification routing.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -22,6 +22,6 @@
     "stripe": "^18.0.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   }
 }
