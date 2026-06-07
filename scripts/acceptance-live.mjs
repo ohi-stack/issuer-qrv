@@ -1,20 +1,19 @@
 #!/usr/bin/env node
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const BASE_URL = process.env.ACCEPTANCE_BASE_URL || 'https://verify.qrv.network';
+const BASE_URL = process.env.ACCEPTANCE_BASE_URL || 'https://issuer.qrv.network';
 const RETRY_LIMIT = 3;
 const BASE_DELAY_MS = 1500;
-const JITTER_MIN_MS = 1000;
+const JITTER_MIN_MS = 1500;
 const JITTER_MAX_MS = 2500;
 const OUTPUT_PATH = 'artifacts/acceptance-live.json';
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const USER_AGENT = 'QRV-Monitor/1.0';
 
 const nodes = [
-  { path: '/', critical: true },
-  { path: '/verify/QRV-DEMO-001', critical: true },
-  { path: '/help', critical: true },
-  { path: '/scan', critical: true },
+  { path: '/ping', critical: true },
+  { path: '/health', critical: true },
+  { path: '/ready', critical: true },
+  { path: '/version', critical: true },
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
