@@ -1,50 +1,60 @@
 #!/usr/bin/env node
 
+import dns from 'node:dns';
+
+dns.setDefaultResultOrder('ipv4first');
+
 const DEFAULT_TIMEOUT_MS = Number(process.env.QRV_AUDIT_TIMEOUT_MS || 15_000);
 const USER_AGENT = process.env.QRV_AUDIT_USER_AGENT || 'QRV-Live-Domain-Audit/1.0';
 
 const checks = [
   {
     domain: 'qrv.network',
-    role: 'Hub HTML',
+    role: 'Root QR-V node',
     url: process.env.QRV_AUDIT_ROOT_URL || 'https://qrv.network',
-    expected: 'hub HTML',
+    expectedContentType: 'text/html',
+    expectedKeyword: 'QR-V hub marker',
     validate: validateHubHtml,
   },
   {
     domain: 'qrv.network',
-    role: 'Hub status',
+    role: 'Root QR-V status',
     url: process.env.QRV_AUDIT_ROOT_STATUS_URL || 'https://qrv.network/status',
-    expected: 'hub status page',
+    expectedContentType: 'text/html',
+    expectedKeyword: 'Production Status',
     validate: validateHubStatus,
   },
   {
     domain: 'api.qrv.network',
     role: 'API health',
     url: process.env.QRV_AUDIT_API_HEALTHZ_URL || 'https://api.qrv.network/healthz',
-    expected: 'API health JSON',
+    expectedContentType: 'application/json',
+    expectedKeyword: 'health/status JSON marker',
     validate: validateApiHealthJson,
   },
   {
-    domain: 'registry.qrv.network',
-    role: 'Registry status',
-    url: process.env.QRV_AUDIT_REGISTRY_URL || 'https://registry.qrv.network',
-    expected: 'registry/status response',
-    validate: validateRegistryStatus,
+    domain: 'verify.qrv.network',
+    role: 'Verification result',
+    url: process.env.QRV_AUDIT_VERIFY_DEMO_URL || 'https://verify.qrv.network/QRV-DEMO-001',
+    expectedContentType: 'text/html',
+    expectedKeyword: 'QRV-DEMO-001 verification marker',
+    validate: validateStyledVerificationResult,
   },
   {
     domain: 'issuer.qrv.network',
     role: 'Issuer login',
     url: process.env.QRV_AUDIT_ISSUER_LOGIN_URL || 'https://issuer.qrv.network/login',
-    expected: 'issuer login HTML',
+    expectedContentType: 'text/html',
+    expectedKeyword: 'issuer login marker',
     validate: validateIssuerLogin,
   },
   {
-    domain: 'verify.qrv.network',
-    role: 'Styled verification result',
-    url: process.env.QRV_AUDIT_VERIFY_DEMO_URL || 'https://verify.qrv.network/QRV-DEMO-001',
-    expected: 'styled verification result HTML',
-    validate: validateStyledVerificationResult,
+    domain: 'registry.qrv.network',
+    role: 'Registry service',
+    url: process.env.QRV_AUDIT_REGISTRY_URL || 'https://registry.qrv.network',
+    expectedContentType: 'text/html or application/json',
+    expectedKeyword: 'registry/status marker',
+    validate: validateRegistryStatus,
   },
 ];
 
@@ -125,6 +135,10 @@ function validateApiHealthJson({ response, contentType, body }) {
 function validateRegistryStatus({ response, contentType, body }) {
   const statusError = requireStatus(response);
   if (statusError) return statusError;
+
+  if (!hasHtmlContentType(contentType) && !hasJsonContentType(contentType)) {
+    return `expected HTML or JSON content-type, got "${contentType || 'missing'}"`;
+  }
 
   if (hasJsonContentType(contentType)) {
     try {
@@ -208,14 +222,25 @@ async function runCheck(check) {
 function printResult(result) {
   const state = result.passed ? 'PASS' : 'FAIL';
   const status = result.status === null ? 'NO_RESPONSE' : result.status;
-  const details = `${state} ${result.domain} [${result.role}] ${status} ${result.elapsedMs}ms ${result.finalUrl}`;
+  const actualContentType = result.contentType || 'missing';
+  const expected = `expected content-type=${result.expectedContentType}; keyword=${result.expectedKeyword}`;
+  const details = [
+    state,
+    result.domain,
+    `[${result.role}]`,
+    `status=${status}`,
+    `elapsed=${result.elapsedMs}ms`,
+    `content-type="${actualContentType}"`,
+    expected,
+    `url=${result.finalUrl}`,
+  ].join(' ');
 
   if (result.passed) {
     console.log(details);
     return;
   }
 
-  console.error(`${details} :: ${result.error} (expected ${result.expected}; requested ${result.url})`);
+  console.error(`${details} :: ${result.error}; requested=${result.url}`);
 }
 
 async function main() {
