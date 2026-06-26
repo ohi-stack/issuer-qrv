@@ -21,7 +21,7 @@ Run the live audit from this repository:
 npm run audit:live
 ```
 
-The script checks the production URLs below. Every result prints `PASS` or `FAIL`, the HTTP status, the actual content type, and the expected content type plus keyword marker.
+The script checks the production URLs below. Every result prints `PASS` or `FAIL`, the expected service/repository target, the HTTP status, the actual content type, and the expected content type plus keyword marker.
 
 | URL | Expected content type | Expected keyword marker |
 | --- | --- | --- |
@@ -59,7 +59,8 @@ Optional environment overrides:
 5. Confirm UI domains (`qrv.network`, `verify.qrv.network`, and `issuer.qrv.network`) do not expose JSON-only backend routes as their primary response.
 6. Run `npm run audit:live` after every DNS, proxy, or deployment change and record any failing URL with the observed status, content type, and keyword mismatch.
 7. Fix the routing layer before changing application code when a hostname serves the wrong repository or runtime.
-8. Re-run the audit until all checks pass, then run `npm run build` before release sign-off.
+8. Confirm `store.qrv.network` remains pointed at the managed WordPress store even though it is not part of the automated route audit.
+9. Re-run the audit until all checks pass, then run `npm run build` before release sign-off.
 
 ## Failure triage
 

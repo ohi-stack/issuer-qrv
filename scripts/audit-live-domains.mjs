@@ -11,6 +11,7 @@ const checks = [
   {
     domain: 'qrv.network',
     role: 'Root QR-V node',
+    expectedService: 'ohi-stack/qrv-node (Express, server.js)',
     url: process.env.QRV_AUDIT_ROOT_URL || 'https://qrv.network',
     expectedContentType: 'text/html',
     expectedKeyword: 'QR-V hub marker',
@@ -19,6 +20,7 @@ const checks = [
   {
     domain: 'qrv.network',
     role: 'Root QR-V status',
+    expectedService: 'ohi-stack/qrv-node (Express, server.js)',
     url: process.env.QRV_AUDIT_ROOT_STATUS_URL || 'https://qrv.network/status',
     expectedContentType: 'text/html',
     expectedKeyword: 'Production Status',
@@ -27,6 +29,7 @@ const checks = [
   {
     domain: 'api.qrv.network',
     role: 'API health',
+    expectedService: 'ohi-stack/qrv-api (Express, server.js)',
     url: process.env.QRV_AUDIT_API_HEALTHZ_URL || 'https://api.qrv.network/healthz',
     expectedContentType: 'application/json',
     expectedKeyword: 'health/status JSON marker',
@@ -35,6 +38,7 @@ const checks = [
   {
     domain: 'verify.qrv.network',
     role: 'Verification result',
+    expectedService: 'ohi-stack/qrv-node (Express, server.js)',
     url: process.env.QRV_AUDIT_VERIFY_DEMO_URL || 'https://verify.qrv.network/QRV-DEMO-001',
     expectedContentType: 'text/html',
     expectedKeyword: 'QRV-DEMO-001 verification marker',
@@ -43,6 +47,7 @@ const checks = [
   {
     domain: 'issuer.qrv.network',
     role: 'Issuer login',
+    expectedService: 'ohi-stack/issuer-qrv (Next.js)',
     url: process.env.QRV_AUDIT_ISSUER_LOGIN_URL || 'https://issuer.qrv.network/login',
     expectedContentType: 'text/html',
     expectedKeyword: 'issuer login marker',
@@ -51,6 +56,7 @@ const checks = [
   {
     domain: 'registry.qrv.network',
     role: 'Registry service',
+    expectedService: 'ohi-stack/qrv-registry (Express, server.js)',
     url: process.env.QRV_AUDIT_REGISTRY_URL || 'https://registry.qrv.network',
     expectedContentType: 'text/html or application/json',
     expectedKeyword: 'registry/status marker',
@@ -228,6 +234,7 @@ function printResult(result) {
     state,
     result.domain,
     `[${result.role}]`,
+    `service="${result.expectedService}"`,
     `status=${status}`,
     `elapsed=${result.elapsedMs}ms`,
     `content-type="${actualContentType}"`,
