@@ -1,1 +1,14 @@
+{
+  "name": "one-companion-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private WordPress companion plugin foundation for One Companion operations.",
+  "scripts": {
+    "lint:php": "composer run lint:php",
+    "test": "npm run lint:php"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
 {"name":"one-companion-plugin","version":"0.1.0","private":true,"description":"Build tooling placeholder for ONE Companion Plugin.","scripts":{"test":"echo \"No JavaScript tests configured yet\""}}
