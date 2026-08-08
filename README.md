@@ -1,59 +1,56 @@
-# QR-V™ Issuer + Verification Launch Readiness
+# QR-V™ Issuer Portal — Consolidated Source Archive
 
-This repository contains the QR-V issuer portal, API service entrypoint, and public verification assets used for live-domain production launch checks.
+The QR-V Issuer Portal is now being consolidated into the primary platform application.
 
-## Production services
+## Canonical production route
 
-- Issuer portal: `https://issuer.qrv.network`
-- API service: `https://api.qrv.network`
-- Public verification: `https://verify.qrv.network/{qrvid}`
-
-## First production seed record
-
-- QRVID: `QRV-PROD-CERT-000001`
-- Verification URL: `https://verify.qrv.network/QRV-PROD-CERT-000001`
-- Expected public state: `VERIFIED`
-
-## Smoke test command (live domain)
-
-```bash
-ISSUER_BASE_URL=https://issuer.qrv.network \
-API_BASE_URL=https://api.qrv.network \
-VERIFY_BASE_URL=https://verify.qrv.network \
-SMOKE_API_KEY=*** \
-SMOKE_JWT=*** \
-npm run smoke:e2e
+```text
+https://qrv.network/issuer
+https://qrv.network/issuer/dashboard
+https://qrv.network/issuer/records
 ```
 
-The smoke flow validates:
+The active public platform repository is:
 
-1. `GET /healthz`
-2. `GET /readyz`
-3. create certificate
-4. verify returns `VERIFIED`
-5. revoke certificate
-6. verify returns `REVOKED`
-7. verify missing QRVID returns `NOT_FOUND`
-
-## First pilot flow
-
-1. Confirm migrations are applied before traffic cutover.
-2. Validate production env with `npm run validate:prod`.
-3. Execute live smoke against production domains.
-4. Confirm seed record resolves as `VERIFIED`.
-5. Issue pilot certificate for external partner.
-6. Share public verify URL and confirm deterministic state rendering.
-
-## Local development
-
-```bash
-npm install
-npm run dev
+```text
+ohi-stack/qrv-node
 ```
 
-## Quality gates
+The canonical backend is:
 
-```bash
-npm run check
-npm test
+```text
+ohi-stack/qrv-api
+https://api.qrv.network
 ```
+
+## Repository status
+
+This repository remains important as the richer Next.js issuer implementation and migration source. It should not be treated as the required production deployment after two-node cutover.
+
+Preserve it for:
+
+- issuer UX and component migration;
+- multi-user authentication work;
+- billing and analytics UI patterns;
+- richer dashboard modules;
+- historical production issuer work.
+
+## Legacy compatibility
+
+If `issuer.qrv.network` remains in DNS, point it to the same `qrv-node` deployment. The platform redirects it to `https://qrv.network/issuer`.
+
+## Production lifecycle
+
+The consolidated platform must preserve:
+
+```text
+issuer login
+→ create record
+→ generate QRVID
+→ generate QR
+→ public VERIFIED result
+→ revoke
+→ public REVOKED result
+```
+
+Do not delete this repository until the richer issuer capabilities required for commercial launch have been migrated or intentionally retired.
